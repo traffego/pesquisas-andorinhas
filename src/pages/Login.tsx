@@ -69,21 +69,21 @@ export const Login: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 relative overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 relative overflow-hidden text-foreground">
       {/* Background gradients */}
       <div className="absolute top-1/4 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]"></div>
-      <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] translate-x-1/2 translate-y-1/2 rounded-full bg-violet-600/10 blur-[100px]"></div>
+      <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] translate-x-1/2 translate-y-1/2 rounded-full bg-primary/5 blur-[100px]"></div>
 
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/40 backdrop-blur-xl p-8 shadow-2xl relative z-10">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-8 shadow-2xl relative z-10">
         {/* Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="bg-primary/20 p-3 rounded-2xl text-primary border border-primary/30 mb-4">
+          <div className="bg-primary/10 p-3 rounded-2xl text-primary border border-primary/20 mb-4">
             <Bird className="h-8 w-8" />
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-violet-400 bg-clip-text text-transparent">
+          <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-blue-600 dark:to-blue-400 bg-clip-text text-transparent">
             Andorinha
           </h2>
-          <p className="text-zinc-400 text-sm mt-2 text-center">
+          <p className="text-muted-foreground text-sm mt-2 text-center">
             {isMocked 
               ? 'Conectando no modo de simulação offline.'
               : 'Faça login para gerenciar suas pesquisas.'}
@@ -93,8 +93,8 @@ export const Login: React.FC = () => {
         {errorMsg && (
           <div className={`mb-6 p-4 rounded-xl border flex gap-3 text-sm ${
             errorMsg.includes('sucesso') 
-              ? 'bg-emerald-950/20 border-emerald-900/50 text-emerald-400' 
-              : 'bg-red-950/20 border-red-900/50 text-red-400'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+              : 'bg-destructive/10 border-destructive/20 text-destructive'
           }`}>
             <ShieldAlert className="h-5 w-5 shrink-0" />
             <span>{errorMsg}</span>
@@ -103,7 +103,7 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Endereço de e-mail
             </label>
             <input
@@ -112,13 +112,13 @@ export const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="exemplo@dominio.com"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-primary focus:outline-none transition-colors"
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
             />
           </div>
 
           {!isMocked && (
             <div>
-              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Senha
               </label>
               <input
@@ -127,7 +127,7 @@ export const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Sua senha secreta"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-primary focus:outline-none transition-colors"
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
               />
             </div>
           )}
@@ -135,10 +135,10 @@ export const Login: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-primary py-3.5 font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary-hover active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl bg-primary py-3.5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
             ) : (
               <>
                 {isSignUp ? 'Criar minha conta' : 'Entrar no painel'}
@@ -149,19 +149,19 @@ export const Login: React.FC = () => {
         </form>
 
         {isMocked && (
-          <div className="mt-6 border-t border-zinc-800 pt-6">
+          <div className="mt-6 border-t border-border pt-6">
             <button
               onClick={handleDemoLogin}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 py-3 font-semibold text-zinc-200 hover:bg-zinc-800/80 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full rounded-xl border border-border bg-background py-3 font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm text-sm"
             >
-              <Sparkles className="h-4 w-4 text-violet-400" />
+              <Sparkles className="h-4 w-4 text-primary" />
               Entrar direto como Admin Demo
             </button>
           </div>
         )}
 
         {!isMocked && (
-          <div className="mt-6 text-center text-sm text-zinc-500">
+          <div className="mt-6 text-center text-sm text-muted-foreground">
             <button
               onClick={() => setIsSignUp(!isSignUp)}
               className="text-primary hover:underline font-medium"

@@ -136,15 +136,15 @@ export const Pesquisas: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in text-foreground">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Pesquisas</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">Gerencie seus formulários de pesquisa e conexões de fluxo condicional.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pesquisas</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Gerencie seus formulários de pesquisa e conexões de fluxo condicional.</p>
         </div>
         <button
           onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary-hover active:scale-[0.98] transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           Nova Pesquisa
@@ -156,23 +156,23 @@ export const Pesquisas: React.FC = () => {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
         </div>
       ) : pesquisas.length === 0 ? (
-        <div className="text-center py-20 rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/10">
-          <ClipboardList className="h-12 w-12 mx-auto text-zinc-700 mb-4" />
-          <h3 className="font-bold text-zinc-400 text-lg">Nenhuma pesquisa encontrada</h3>
-          <p className="text-zinc-600 text-sm mt-1 mb-6">Crie sua primeira pesquisa para começar a desenhar fluxos de perguntas.</p>
+        <div className="text-center py-20 rounded-2xl border border-dashed border-border bg-card/50">
+          <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground/45 mb-4" />
+          <h3 className="font-bold text-muted-foreground text-lg">Nenhuma pesquisa encontrada</h3>
+          <p className="text-muted-foreground/80 text-sm mt-1 mb-6">Crie sua primeira pesquisa para começar a desenhar fluxos de perguntas.</p>
           <button
             onClick={handleOpenAdd}
-            className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-zinc-800/80 transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-xl bg-card border border-border px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all cursor-pointer shadow-sm"
           >
             Cadastrar Pesquisa
           </button>
         </div>
       ) : (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/60 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                <tr className="border-b border-border bg-muted/50 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   <th className="p-4 pl-6">Pesquisa / Projeto</th>
                   <th className="p-4">Líder</th>
                   <th className="p-4">Status</th>
@@ -180,31 +180,31 @@ export const Pesquisas: React.FC = () => {
                   <th className="p-4 pr-6 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {pesquisas.map((p) => {
                   const proj = projetos.find(pr => pr.id === p.projeto_id)
                   const lid = lideres.find(l => l.id === p.lider_id)
 
                   return (
-                    <tr key={p.id} className="hover:bg-zinc-900/20 transition-colors group">
+                    <tr key={p.id} className="hover:bg-muted/30 transition-colors group">
                       <td className="p-4 pl-6">
                         <div>
-                          <p className="font-semibold text-zinc-200 group-hover:text-primary transition-colors">{p.titulo}</p>
-                          <span className="text-[10px] text-zinc-500 font-medium">
-                            Projeto: {proj?.nome || <span className="italic text-zinc-600">Sem projeto</span>}
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{p.titulo}</p>
+                          <span className="text-[10px] text-muted-foreground font-medium">
+                            Projeto: {proj?.nome || <span className="italic text-muted-foreground/60">Sem projeto</span>}
                           </span>
                         </div>
                       </td>
-                      <td className="p-4 text-zinc-400 text-sm">
-                        {lid?.nome || <span className="italic text-zinc-600 text-xs">Sem líder</span>}
+                      <td className="p-4 text-muted-foreground text-sm">
+                        {lid?.nome || <span className="italic text-muted-foreground/60 text-xs">Sem líder</span>}
                       </td>
                       <td className="p-4">
                         <button
                           onClick={() => togglePublicada(p)}
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border cursor-pointer select-none transition-colors ${
                             p.publicada
-                              ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400'
-                              : 'bg-zinc-800/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-muted border-border text-muted-foreground hover:border-zinc-400'
                           }`}
                         >
                           {p.publicada ? (
@@ -218,24 +218,24 @@ export const Pesquisas: React.FC = () => {
                           )}
                         </button>
                       </td>
-                      <td className="p-4 text-sm text-zinc-500">
+                      <td className="p-4 text-sm text-muted-foreground">
                         {p.publicada ? (
                           <a 
                             href={`/r/${p.token}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline hover:text-violet-400 transition-colors"
+                            className="text-primary hover:underline hover:text-blue-500 font-semibold transition-colors"
                           >
                             /r/{p.token}
                           </a>
                         ) : (
-                          <span className="italic text-zinc-600">Falta publicar</span>
+                          <span className="italic text-muted-foreground/65">Falta publicar</span>
                         )}
                       </td>
                       <td className="p-4 pr-6 text-right space-x-1 whitespace-nowrap">
                         <Link
                           to={`/admin/pesquisas/${p.id}/builder`}
-                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-zinc-850 hover:bg-primary hover:text-white text-zinc-400 transition-colors text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-muted hover:bg-primary hover:text-primary-foreground border border-border text-muted-foreground transition-colors text-xs font-semibold cursor-pointer shadow-sm"
                           title="Desenhar Fluxo"
                         >
                           <GitFork className="h-3.5 w-3.5" />
@@ -244,7 +244,7 @@ export const Pesquisas: React.FC = () => {
 
                         <Link
                           to={`/admin/pesquisas/${p.id}/distribuir`}
-                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-zinc-850 hover:bg-blue-600 hover:text-white text-zinc-400 transition-colors text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-muted hover:bg-blue-600 hover:text-white border border-border text-muted-foreground transition-colors text-xs font-semibold cursor-pointer shadow-sm"
                           title="Compartilhar"
                         >
                           <Share2 className="h-3.5 w-3.5" />
@@ -253,7 +253,7 @@ export const Pesquisas: React.FC = () => {
 
                         <Link
                           to={`/admin/pesquisas/${p.id}/relatorios`}
-                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-zinc-850 hover:bg-emerald-600 hover:text-white text-zinc-400 transition-colors text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-muted hover:bg-emerald-600 hover:text-white border border-border text-muted-foreground transition-colors text-xs font-semibold cursor-pointer shadow-sm"
                           title="Relatórios"
                         >
                           <BarChart3 className="h-3.5 w-3.5" />
@@ -262,14 +262,14 @@ export const Pesquisas: React.FC = () => {
 
                         <button
                           onClick={() => handleOpenEdit(p)}
-                          className="p-2 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                          className="p-2 rounded-lg bg-muted hover:bg-card border border-border text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                           title="Editar Info"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(p.id)}
-                          className="p-2 rounded-lg bg-zinc-850 hover:bg-red-950/40 text-zinc-400 hover:text-red-400 transition-colors"
+                          className="p-2 rounded-lg bg-muted hover:bg-destructive/10 border border-border text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                           title="Excluir"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -287,12 +287,12 @@ export const Pesquisas: React.FC = () => {
       {/* Modal Dialog */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-5">
-              <h3 className="text-lg font-bold text-zinc-100">{id ? 'Editar Pesquisa' : 'Criar Nova Pesquisa'}</h3>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-up text-foreground">
+            <div className="flex justify-between items-center border-b border-border pb-4 mb-5">
+              <h3 className="text-lg font-bold text-foreground">{id ? 'Editar Pesquisa' : 'Criar Nova Pesquisa'}</h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -300,7 +300,7 @@ export const Pesquisas: React.FC = () => {
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                   Título da Pesquisa
                 </label>
                 <input
@@ -309,12 +309,12 @@ export const Pesquisas: React.FC = () => {
                   value={titulo}
                   onChange={(e) => setTitulo(e.target.value)}
                   placeholder="Ex: Pesquisa Eleitoral Bairro Centro"
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:border-primary focus:outline-none transition-colors text-sm"
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                   Descrição / Objetivo
                 </label>
                 <textarea
@@ -322,19 +322,19 @@ export const Pesquisas: React.FC = () => {
                   onChange={(e) => setDescricao(e.target.value)}
                   placeholder="Descreva sobre qual tema é esta pesquisa..."
                   rows={3}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:border-primary focus:outline-none transition-colors text-sm resize-none"
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm resize-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                     Projeto Associado
                   </label>
                   <select
                     value={projetoId}
                     onChange={(e) => setProjetoId(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                   >
                     <option value="">Sem projeto</option>
                     {projetos.map(proj => (
@@ -344,13 +344,13 @@ export const Pesquisas: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                     Líder Associado
                   </label>
                   <select
                     value={liderId}
                     onChange={(e) => setLiderId(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                   >
                     <option value="">Nenhum líder</option>
                     {lideres.map(lid => (
@@ -360,30 +360,30 @@ export const Pesquisas: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl">
+              <div className="flex items-center gap-3 bg-muted/50 border border-border p-3 rounded-xl">
                 <input
                   type="checkbox"
                   id="publicada"
                   checked={publicada}
                   onChange={(e) => setPublicada(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-800 text-primary bg-zinc-950 focus:ring-primary focus:ring-offset-zinc-900"
+                  className="h-4 w-4 rounded border-border text-primary bg-background focus:ring-primary focus:ring-offset-background"
                 />
-                <label htmlFor="publicada" className="text-sm font-semibold text-zinc-300 select-none cursor-pointer">
+                <label htmlFor="publicada" className="text-sm font-semibold text-foreground select-none cursor-pointer">
                   Publicar Pesquisa de imediato?
                 </label>
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4 mt-6">
+              <div className="flex justify-end gap-3 border-t border-border pt-4 mt-6">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 rounded-xl transition-all"
+                  className="px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-hover rounded-xl shadow-lg shadow-primary/20 transition-all"
+                  className="px-5 py-2 text-sm font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-xl shadow-lg shadow-primary/10 transition-all cursor-pointer"
                 >
                   {id ? 'Salvar Alterações' : 'Criar Pesquisa'}
                 </button>

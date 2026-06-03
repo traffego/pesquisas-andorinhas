@@ -255,7 +255,7 @@ export const Responder: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-zinc-950">
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     )
@@ -263,11 +263,11 @@ export const Responder: React.FC = () => {
 
   if (errorMsg) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6 text-center">
-        <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 space-y-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 space-y-4 shadow-xl">
           <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto animate-bounce" />
-          <h3 className="text-lg font-bold text-zinc-200">Pesquisa Indisponível</h3>
-          <p className="text-sm text-zinc-500 leading-relaxed">{errorMsg}</p>
+          <h3 className="text-lg font-bold text-foreground">Pesquisa Indisponível</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">{errorMsg}</p>
         </div>
       </div>
     )
@@ -275,19 +275,19 @@ export const Responder: React.FC = () => {
 
   if (respondeu) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6 text-center">
-        <div className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-900/30 p-8 space-y-6 shadow-2xl relative overflow-hidden">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
+        <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 -translate-y-10 translate-x-10 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl"></div>
-          <div className="bg-emerald-950/40 p-4 rounded-full text-emerald-400 border border-emerald-900/30 w-fit mx-auto">
+          <div className="bg-emerald-500/10 p-4 rounded-full text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-fit mx-auto">
             <CheckCircle2 className="h-12 w-12" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-extrabold text-zinc-100">Obrigado!</h3>
-            <p className="text-sm text-zinc-400 leading-relaxed">
+            <h3 className="text-2xl font-extrabold text-foreground">Obrigado!</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Suas respostas foram registradas com sucesso no sistema.
             </p>
           </div>
-          <div className="text-zinc-650 text-[10px] uppercase font-bold tracking-widest pt-4 border-t border-zinc-900">
+          <div className="text-muted-foreground/60 text-[10px] uppercase font-bold tracking-widest pt-4 border-t border-border">
             Andorinha Pesquisas
           </div>
         </div>
@@ -296,25 +296,25 @@ export const Responder: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 relative overflow-hidden font-sans">
+    <div className="flex min-h-screen flex-col bg-background text-foreground relative overflow-hidden font-sans">
       {/* Background radial overlays */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[350px] w-[350px] rounded-full bg-primary/5 blur-[80px]"></div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-zinc-900 h-1.5 sticky top-0 z-50">
+      <div className="w-full bg-muted h-1.5 sticky top-0 z-50">
         <div 
-          className="bg-gradient-to-r from-primary to-violet-500 h-full transition-all duration-300 rounded-r-full"
+          className="bg-gradient-to-r from-primary to-blue-500 h-full transition-all duration-300 rounded-r-full"
           style={{ width: `${getProgresso()}%` }}
         ></div>
       </div>
 
       {/* Header */}
-      <header className="py-6 px-6 border-b border-zinc-900/60 flex items-center justify-between shrink-0">
+      <header className="py-6 px-6 border-b border-border/60 flex items-center justify-between shrink-0 bg-card/10 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <Bird className="h-5 w-5 text-primary" />
-          <span className="text-xs font-extrabold tracking-widest text-zinc-300 uppercase">Andorinha</span>
+          <span className="text-xs font-extrabold tracking-widest text-foreground uppercase">Andorinha</span>
         </div>
-        <div className="text-[10px] bg-zinc-900 text-zinc-400 px-2.5 py-1 rounded-full font-bold">
+        <div className="text-[10px] bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-bold border border-border">
           {getProgresso()}% Concluído
         </div>
       </header>
@@ -325,11 +325,11 @@ export const Responder: React.FC = () => {
           <div className="w-full space-y-8 animate-slide-in">
             {/* Título pergunta */}
             <div className="space-y-3">
-              <h2 className="text-2xl font-extrabold tracking-tight text-zinc-100 leading-tight">
+              <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
                 {perguntaAtual.titulo}
               </h2>
               {perguntaAtual.obrigatoria && (
-                <span className="inline-block text-[9px] bg-red-950/40 border border-red-900/30 text-red-400 px-2 py-0.5 rounded-full font-bold">
+                <span className="inline-block text-[9px] bg-destructive/10 border border-destructive/20 text-destructive px-2 py-0.5 rounded-full font-bold">
                   Obrigatório
                 </span>
               )}
@@ -347,7 +347,7 @@ export const Responder: React.FC = () => {
                     setValidacaoErro('')
                   }}
                   placeholder="Escreva sua resposta..."
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-zinc-100 placeholder-zinc-600 focus:border-primary focus:outline-none transition-colors text-base"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
                 />
               )}
 
@@ -361,7 +361,7 @@ export const Responder: React.FC = () => {
                   }}
                   placeholder="Escreva sua resposta com detalhes..."
                   rows={5}
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none transition-colors text-base resize-none leading-relaxed"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base resize-none leading-relaxed shadow-sm"
                 />
               )}
 
@@ -375,7 +375,7 @@ export const Responder: React.FC = () => {
                     setValidacaoErro('')
                   }}
                   placeholder="nome@provedor.com"
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-zinc-100 placeholder-zinc-600 focus:border-primary focus:outline-none transition-colors text-base"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
                 />
               )}
 
@@ -391,7 +391,7 @@ export const Responder: React.FC = () => {
                   }}
                   placeholder="(00) 00000-0000"
                   maxLength={15}
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-zinc-100 placeholder-zinc-600 focus:border-primary focus:outline-none transition-colors text-base"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
                 />
               )}
 
@@ -404,17 +404,17 @@ export const Responder: React.FC = () => {
                       <button
                         key={opcao.id}
                         onClick={() => handleToggleOpcao(opcao.id)}
-                        className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                        className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
                           isSelected
-                            ? 'bg-primary/20 border-primary text-zinc-100 shadow-md shadow-primary/10'
-                            : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:border-zinc-700/80 hover:bg-zinc-900/60'
+                            ? 'bg-primary/10 border-primary text-foreground font-semibold'
+                            : 'bg-card border-border text-muted-foreground hover:border-primary/20 hover:bg-muted/50'
                         }`}
                       >
                         <span className="font-semibold text-base">{opcao.texto}</span>
                         <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-primary bg-primary' : 'border-zinc-700'
+                          isSelected ? 'border-primary bg-primary' : 'border-border'
                         }`}>
-                          {isSelected && <div className="h-2 w-2 rounded-full bg-white animate-scale-up"></div>}
+                          {isSelected && <div className="h-2 w-2 rounded-full bg-primary-foreground animate-scale-up"></div>}
                         </div>
                       </button>
                     )
@@ -424,7 +424,7 @@ export const Responder: React.FC = () => {
             </div>
 
             {validacaoErro && (
-              <p className="text-red-400 text-sm font-semibold flex items-center gap-1.5 animate-pulse">
+              <p className="text-destructive text-sm font-semibold flex items-center gap-1.5 animate-pulse">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {validacaoErro}
               </p>
@@ -433,7 +433,7 @@ export const Responder: React.FC = () => {
             {/* Ação de avançar */}
             <button
               onClick={handleAvancar}
-              className="w-full rounded-2xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 hover:bg-primary-hover active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-base"
             >
               <span>Avançar</span>
               <ChevronRight className="h-5 w-5" />
@@ -443,7 +443,7 @@ export const Responder: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="py-4 px-6 border-t border-zinc-900/40 text-center text-[10px] text-zinc-600 font-semibold tracking-wider shrink-0 uppercase flex justify-center items-center gap-1.5">
+      <footer className="py-4 px-6 border-t border-border/40 text-center text-[10px] text-muted-foreground/60 font-semibold tracking-wider shrink-0 uppercase flex justify-center items-center gap-1.5 bg-card/10">
         <Lock className="h-3 w-3" />
         <span>Ambiente Criptografado e Seguro</span>
       </footer>
