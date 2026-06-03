@@ -19,6 +19,7 @@ import { dbService, type Pesquisa, type Pergunta } from '../../services/db'
 import { StartNode } from '../../components/builder/StartNode'
 import { EndNode } from '../../components/builder/EndNode'
 import { QuestionNode } from '../../components/builder/QuestionNode'
+import { SubflowNode } from '../../components/builder/SubflowNode'
 import { ButtonEdge } from '../../components/builder/ButtonEdge'
 import { 
   ArrowLeft, 
@@ -27,13 +28,15 @@ import {
   X, 
   PlusCircle, 
   Trash2, 
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react'
 
 const nodeTypes = {
   start: StartNode,
   end: EndNode,
-  question: QuestionNode
+  question: QuestionNode,
+  subflow: SubflowNode
 }
 
 const edgeTypes = {
@@ -66,9 +69,25 @@ export const Builder: React.FC = () => {
   const pendingConnectionRef = useRef<Connection | null>(null)
   const [edgeSourceQuestion, setEdgeSourceQuestion] = useState<any | null>(null)
 
+  // Estados do subfluxo
+  const [pesquisasDisponiveis, setPesquisasDisponiveis] = useState<Pesquisa[]>([])
+  const [isSubflowModalOpen, setIsSubflowModalOpen] = useState(false)
+  const [editingSubflowNodeId, setEditingSubflowNodeId] = useState<string | null>(null)
+  const [selectedSubflowId, setSelectedSubflowId] = useState<string>('')
+
+  const loadPesquisasDisponiveis = async () => {
+    try {
+      const list = await dbService.getPesquisas()
+      setPesquisasDisponiveis(list)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     if (id) {
       loadPesquisa(id)
+      loadPesquisasDisponiveis()
     }
   }, [id])
 
@@ -85,7 +104,7 @@ export const Builder: React.FC = () => {
       // Carregar nós e arestas do flow_data
       const flow = pesq.flow_data || {}
       
-      // Mapear callbacks do questionNode nos nós
+      // Mapear callbacks do questionNode e subflowNode nos nós
       const initialNodes = (flow.nodes || []).map((n: Node) => {
         if (n.type === 'question') {
           return {
@@ -94,6 +113,16 @@ export const Builder: React.FC = () => {
               ...n.data,
               onEdit: handleOpenEditQuestion,
               onDelete: handleDeleteQuestionNode
+            }
+          }
+        }
+        if (n.type === 'subflow') {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              onEdit: handleOpenEditSubflow,
+              onDelete: handleDeleteSubflowNode
             }
           }
         }
@@ -145,6 +174,75 @@ export const Builder: React.FC = () => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId))
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
   }, [setNodes, setEdges])
+
+  // --- LÓGICA DE SUBFLUXOS (NÓS) ---
+
+  const handleOpenAddSubflow = () => {
+    setEditingSubflowNodeId(null)
+    setSelectedSubflowId('')
+    setIsSubflowModalOpen(true)
+  }
+
+  const handleOpenEditSubflow = useCallback((nodeId: string) => {
+    setNodes((nds) => {
+      const node = nds.find(n => n.id === nodeId)
+      if (node) {
+        setEditingSubflowNodeId(nodeId)
+        setSelectedSubflowId(node.data.subflowId as string || '')
+        setIsSubflowModalOpen(true)
+      }
+      return nds
+    })
+  }, [setNodes])
+
+  const handleDeleteSubflowNode = useCallback((nodeId: string) => {
+    if (!confirm('Deseja excluir este subfluxo do fluxo? Conexões ligadas a ele serão perdidas.')) return
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId))
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+  }, [setNodes, setEdges])
+
+  const handleSaveSubflow = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedSubflowId) return
+
+    const subflowPesquisa = pesquisasDisponiveis.find(p => p.id === selectedSubflowId)
+    const subflowTitulo = subflowPesquisa ? subflowPesquisa.titulo : 'Pesquisa Desconhecida'
+
+    if (editingSubflowNodeId) {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === editingSubflowNodeId) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                subflowId: selectedSubflowId,
+                subflowTitulo
+              }
+            }
+          }
+          return n
+        })
+      )
+    } else {
+      const newId = crypto.randomUUID()
+      const newNode: Node = {
+        id: newId,
+        type: 'subflow',
+        position: { x: 250, y: 350 },
+        data: {
+          id: newId,
+          subflowId: selectedSubflowId,
+          subflowTitulo,
+          onEdit: handleOpenEditSubflow,
+          onDelete: handleDeleteSubflowNode
+        }
+      }
+      setNodes((nds) => [...nds, newNode])
+    }
+
+    setIsSubflowModalOpen(false)
+  }
 
   const handleAddOpcao = () => {
     if (!newOpcaoTexto.trim()) return
@@ -350,7 +448,9 @@ export const Builder: React.FC = () => {
             titulo: n.data.titulo,
             tipo: n.data.tipo,
             obrigatoria: n.data.obrigatoria,
-            config: n.data.config
+            config: n.data.config,
+            subflowId: n.data.subflowId,
+            subflowTitulo: n.data.subflowTitulo
           }
         })),
         edges
@@ -412,6 +512,13 @@ export const Builder: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleOpenAddSubflow}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
+          >
+            <Layers className="h-4 w-4" />
+            Adicionar Subfluxo
+          </button>
           <button
             onClick={handleOpenAddQuestion}
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
@@ -668,6 +775,63 @@ export const Builder: React.FC = () => {
                 Cancelar Conexão
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL 3: SELECIONAR PESQUISA PARA SUBFLUXO */}
+      {isSubflowModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-5">
+              <h3 className="text-lg font-bold text-zinc-100">
+                {editingSubflowNodeId ? 'Editar Subfluxo' : 'Adicionar Subfluxo'}
+              </h3>
+              <button
+                onClick={() => setIsSubflowModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSubflow} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  Selecionar Pesquisa de Destino
+                </label>
+                <select
+                  required
+                  value={selectedSubflowId}
+                  onChange={(e) => setSelectedSubflowId(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                >
+                  <option value="" disabled>Escolha uma pesquisa...</option>
+                  {pesquisasDisponiveis
+                    .filter((p) => p.id !== id)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.titulo}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsSubflowModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-hover rounded-xl shadow-lg shadow-primary/20 transition-all"
+                >
+                  {editingSubflowNodeId ? 'Salvar Alterações' : 'Adicionar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

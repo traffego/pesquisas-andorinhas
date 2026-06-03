@@ -33,6 +33,18 @@ export const Responder: React.FC = () => {
   const [objetoRelacionado, setObjetoRelacionado] = useState<Objeto | null>(null)
   const [liderRelacionado, setLiderRelacionado] = useState<Lider | null>(null)
 
+  interface SubflowState {
+    pesquisa: Pesquisa
+    flowData: any
+    perguntas: Pergunta[]
+    respostasAcumuladas: Record<string, any>
+    currentNodeId: string
+    objetoRelacionado: Objeto | null
+    liderRelacionado: Lider | null
+  }
+
+  const [subflowStack, setSubflowStack] = useState<SubflowState[]>([])
+
   // Gera ou lê fingerprint do localStorage
   const getDeviceFingerprint = () => {
     let fp = localStorage.getItem('andorinha_device_fp')
@@ -68,12 +80,24 @@ export const Responder: React.FC = () => {
       setPesquisa(pesq)
       setFlowData(pesq.flow_data)
 
-      // Carrega Objeto e Líder relacionados de forma assíncrona se existirem
+      // Carrega Objeto e Líder relacionados
+      let obj: Objeto | null = null
+      let lid: Lider | null = null
       if (pesq.objeto_id) {
-        dbService.getObjetoById(pesq.objeto_id).then(setObjetoRelacionado).catch(console.error)
+        try {
+          obj = await dbService.getObjetoById(pesq.objeto_id)
+          setObjetoRelacionado(obj)
+        } catch (e) {
+          console.error(e)
+        }
       }
       if (pesq.lider_id) {
-        dbService.getLiderById(pesq.lider_id).then(setLiderRelacionado).catch(console.error)
+        try {
+          lid = await dbService.getLiderById(pesq.lider_id)
+          setLiderRelacionado(lid)
+        } catch (e) {
+          console.error(e)
+        }
       }
 
       // 2. Prevenção de duplicados
@@ -92,7 +116,33 @@ export const Responder: React.FC = () => {
       const edges = pesq.flow_data?.edges || []
       const startEdge = edges.find((e: any) => e.source === 'start')
       if (startEdge) {
-        setCurrentNodeId(startEdge.target)
+        const firstNodeId = startEdge.target
+        const firstNode = pesq.flow_data?.nodes?.find((n: any) => n.id === firstNodeId)
+
+        if (firstNode && firstNode.type === 'subflow') {
+          const subflowId = firstNode.data?.subflowId
+          if (!subflowId) {
+            setErrorMsg('Subfluxo não configurado.')
+            setLoading(false)
+            return
+          }
+          const subflowEdge = edges.find((e: any) => e.source === firstNode.id)
+          const returnNodeId = subflowEdge ? subflowEdge.target : 'end'
+
+          const parentState: SubflowState = {
+            pesquisa: pesq,
+            flowData: pesq.flow_data,
+            perguntas: pergs,
+            respostasAcumuladas: {},
+            currentNodeId: returnNodeId,
+            objetoRelacionado: obj,
+            liderRelacionado: lid
+          }
+
+          await enterSubflow(subflowId, parentState)
+        } else {
+          setCurrentNodeId(firstNodeId)
+        }
       } else {
         setErrorMsg('Esta pesquisa ainda não possui um fluxo estruturado.')
       }
@@ -200,6 +250,129 @@ export const Responder: React.FC = () => {
     return true
   }
 
+  // --- SUBFLUXOS E SESSÕES ---
+  const enterSubflow = async (subflowId: string, parentState: SubflowState) => {
+    setLoading(true)
+    try {
+      const subq = await dbService.getPesquisaById(subflowId)
+      if (!subq) {
+        throw new Error('Subfluxo não encontrado ou indisponível.')
+      }
+
+      const subPergs = await dbService.getPerguntas(subq.id)
+
+      // Encontra nó inicial do subfluxo
+      const subEdges = subq.flow_data?.edges || []
+      const subStartEdge = subEdges.find((e: any) => e.source === 'start')
+      if (!subStartEdge) {
+        throw new Error('Subfluxo não possui um fluxo estruturado.')
+      }
+
+      const firstNodeId = subStartEdge.target
+      const firstNode = subq.flow_data?.nodes?.find((n: any) => n.id === firstNodeId)
+
+      if (firstNode && firstNode.type === 'subflow') {
+        // Subfluxo aninhado diretamente na largada
+        const nestedSubflowId = firstNode.data?.subflowId
+        if (!nestedSubflowId) {
+          throw new Error('Subfluxo aninhado não configurado.')
+        }
+        const subflowEdge = subEdges.find((e: any) => e.source === firstNode.id)
+        const returnNodeId = subflowEdge ? subflowEdge.target : 'end'
+
+        let obj: Objeto | null = null
+        let lid: Lider | null = null
+        if (subq.objeto_id) {
+          try { obj = await dbService.getObjetoById(subq.objeto_id) } catch (e) {}
+        }
+        if (subq.lider_id) {
+          try { lid = await dbService.getLiderById(subq.lider_id) } catch (e) {}
+        }
+
+        const middleState: SubflowState = {
+          pesquisa: subq,
+          flowData: subq.flow_data,
+          perguntas: subPergs,
+          respostasAcumuladas: {},
+          currentNodeId: returnNodeId,
+          objetoRelacionado: obj,
+          liderRelacionado: lid
+        }
+
+        setSubflowStack(prev => [...prev, parentState])
+        await enterSubflow(nestedSubflowId, middleState)
+      } else {
+        setSubflowStack(prev => [...prev, parentState])
+
+        setPesquisa(subq)
+        setFlowData(subq.flow_data)
+        setPerguntas(subPergs)
+        setRespostasAcumuladas({})
+        setValorAtual('')
+        setValidacaoErro('')
+
+        if (subq.objeto_id) {
+          dbService.getObjetoById(subq.objeto_id).then(setObjetoRelacionado).catch(console.error)
+        } else {
+          setObjetoRelacionado(null)
+        }
+        if (subq.lider_id) {
+          dbService.getLiderById(subq.lider_id).then(setLiderRelacionado).catch(console.error)
+        } else {
+          setLiderRelacionado(null)
+        }
+
+        setCurrentNodeId(firstNodeId)
+      }
+    } catch (err: any) {
+      console.error(err)
+      setErrorMsg(err.message || 'Erro ao carregar subfluxo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const finalizarFluxoOuSubfluxo = async (
+    pesqId: string,
+    respostasAtuais: Record<string, any>,
+    pilha: SubflowState[]
+  ) => {
+    setLoading(true)
+    try {
+      const itens = Object.keys(respostasAtuais).map(pergId => ({
+        pergunta_id: pergId,
+        valor: respostasAtuais[pergId]
+      }))
+      await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
+
+      if (pilha.length > 0) {
+        const parent = pilha[pilha.length - 1]
+        const novaPilha = pilha.slice(0, -1)
+        setSubflowStack(novaPilha)
+
+        setPesquisa(parent.pesquisa)
+        setFlowData(parent.flowData)
+        setPerguntas(parent.perguntas)
+        setRespostasAcumuladas(parent.respostasAcumuladas)
+        setObjetoRelacionado(parent.objetoRelacionado)
+        setLiderRelacionado(parent.liderRelacionado)
+
+        if (parent.currentNodeId === 'end') {
+          await finalizarFluxoOuSubfluxo(parent.pesquisa.id, parent.respostasAcumuladas, novaPilha)
+        } else {
+          setCurrentNodeId(parent.currentNodeId)
+        }
+      } else {
+        setRespondeu(true)
+      }
+    } catch (err: any) {
+      console.error(err)
+      setErrorMsg(err.message || 'Ocorreu um erro ao gravar suas respostas. Tente novamente.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // --- AVANÇO DE FLUXO ---
   const handleAvancar = async () => {
     if (!validarResposta() || !pesquisa || !flowData) return
@@ -221,7 +394,7 @@ export const Responder: React.FC = () => {
       // Busca arestas condicionais que saem deste nó
       const arestasSaindo = edges.filter((e: any) => e.source === currentNodeId)
       
-      // 1. Tenta encontrar uma aresta que parta do handle correspondente a uma opção selecionada (novo comportamento)
+      // 1. Tenta encontrar uma aresta que parta do handle correspondente a uma opção selecionada
       const arestaPorHandle = arestasSaindo.find((e: any) => 
         e.sourceHandle && e.sourceHandle !== 'output' && selecionadas.includes(e.sourceHandle)
       )
@@ -229,7 +402,7 @@ export const Responder: React.FC = () => {
       if (arestaPorHandle) {
         proximoNoId = arestaPorHandle.target
       } else {
-        // 2. Tenta encontrar uma aresta condicional associada às opções marcadas (comportamento antigo)
+        // 2. Tenta encontrar uma aresta condicional associada às opções marcadas
         const arestaCondicionalCorrespondente = arestasSaindo.find((e: any) => 
           e.data && e.data.opcaoId && selecionadas.includes(e.data.opcaoId)
         )
@@ -254,30 +427,34 @@ export const Responder: React.FC = () => {
       }
     }
 
-    // 2. Se o próximo for o fim, submeter
-    if (proximoNoId === 'end') {
-      await submeterRespostas(novasRespostas)
+    // 2. Verifica se o próximo nó é subfluxo ou fim ou outra pergunta
+    const proximoNo = flowData.nodes?.find((n: any) => n.id === proximoNoId)
+
+    if (proximoNo && proximoNo.type === 'subflow') {
+      const subflowId = proximoNo.data?.subflowId
+      if (!subflowId) {
+        setErrorMsg('Subfluxo não configurado.')
+        return
+      }
+
+      const subflowEdge = edges.find((e: any) => e.source === proximoNo.id)
+      const returnNodeId = subflowEdge ? subflowEdge.target : 'end'
+
+      const parentState: SubflowState = {
+        pesquisa,
+        flowData,
+        perguntas,
+        respostasAcumuladas: novasRespostas,
+        currentNodeId: returnNodeId,
+        objetoRelacionado,
+        liderRelacionado
+      }
+
+      await enterSubflow(subflowId, parentState)
+    } else if (proximoNoId === 'end') {
+      await finalizarFluxoOuSubfluxo(pesquisa.id, novasRespostas, subflowStack)
     } else {
       setCurrentNodeId(proximoNoId)
-    }
-  }
-
-  const submeterRespostas = async (respostas: Record<string, any>) => {
-    if (!pesquisa) return
-    setLoading(true)
-    try {
-      const itens = Object.keys(respostas).map(pergId => ({
-        pergunta_id: pergId,
-        valor: respostas[pergId]
-      }))
-
-      await dbService.saveRespostaCompleta(pesquisa.id, deviceFp, itens)
-      setRespondeu(true)
-    } catch (err: any) {
-      console.error(err)
-      setErrorMsg(err.message || 'Ocorreu um erro ao gravar suas respostas. Tente novamente.')
-    } finally {
-      setLoading(false)
     }
   }
 
