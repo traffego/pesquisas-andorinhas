@@ -11,40 +11,23 @@ export const Login: React.FC = () => {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
   React.useEffect(() => {
-    if (user) {
-      navigate('/admin/dashboard')
-    }
+    if (user) navigate('/admin/dashboard')
   }, [user, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
     setLoading(true)
-
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { nome: email.split('@')[0] }
-          }
-        })
-        if (error) throw error
-        setErrorMsg('Conta criada! Verifique seu e-mail de confirmação.')
-        setIsSignUp(false)
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-        navigate('/admin/dashboard')
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+      navigate('/admin/dashboard')
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao processar requisição.')
+      setErrorMsg('E-mail ou senha inválidos.')
     } finally {
       setLoading(false)
     }
@@ -52,25 +35,19 @@ export const Login: React.FC = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 relative overflow-hidden text-foreground">
-      {/* Background gradients */}
       <div className="absolute top-1/4 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]"></div>
       <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] translate-x-1/2 translate-y-1/2 rounded-full bg-primary/5 blur-[100px]"></div>
 
       <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-8 shadow-2xl relative z-10">
-        {/* Header */}
         <div className="flex flex-col items-center mb-8">
           <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain mb-4 dark:bg-white dark:rounded-xl dark:p-2" />
           <p className="text-muted-foreground text-sm text-center">
-            Faça login para gerenciar suas pesquisas.
+            Acesso restrito. Faça login para continuar.
           </p>
         </div>
 
         {errorMsg && (
-          <div className={`mb-6 p-4 rounded-xl border flex gap-3 text-sm ${
-            errorMsg.includes('criada')
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-              : 'bg-destructive/10 border-destructive/20 text-destructive'
-          }`}>
+          <div className="mb-6 p-4 rounded-xl border flex gap-3 text-sm bg-destructive/10 border-destructive/20 text-destructive">
             <ShieldAlert className="h-5 w-5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -79,14 +56,14 @@ export const Login: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Endereço de e-mail
+              E-mail
             </label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="exemplo@dominio.com"
+              placeholder="seu@email.com"
               className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
             />
           </div>
@@ -100,7 +77,7 @@ export const Login: React.FC = () => {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Sua senha secreta"
+              placeholder="••••••••"
               className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
             />
           </div>
@@ -114,21 +91,12 @@ export const Login: React.FC = () => {
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"></div>
             ) : (
               <>
-                {isSignUp ? 'Criar minha conta' : 'Entrar no painel'}
+                Entrar no painel
                 <ArrowRight className="h-5 w-5" />
               </>
             )}
           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-primary hover:underline font-medium"
-          >
-            {isSignUp ? 'Já tem conta? Entrar agora' : 'Não tem conta? Cadastrar-se'}
-          </button>
-        </div>
       </div>
     </div>
   )
