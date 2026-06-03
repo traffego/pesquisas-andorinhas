@@ -1,9 +1,14 @@
 import { supabase } from '../lib/supabase'
 
-export interface Projeto {
+export interface Objeto {
   id: string
   nome: string
   descricao: string | null
+  tipo: 'projeto' | 'evento'
+  termo_fomento: string | null
+  codigo_objeto: string | null
+  codigo_programa: string | null
+  nome_programa: string | null
   user_id?: string
   created_at?: string
 }
@@ -23,7 +28,7 @@ export interface Pesquisa {
   descricao: string | null
   token: string
   publicada: boolean
-  projeto_id: string | null
+  objeto_id: string | null
   lider_id: string | null
   flow_data: any
   user_id?: string
@@ -60,28 +65,28 @@ export interface RespostaItem {
 }
 
 export const dbService = {
-  // --- PROJETOS ---
-  async getProjetos(): Promise<Projeto[]> {
-    const { data, error } = await supabase.from('projeto').select('*').order('created_at', { ascending: false })
+  // --- OBJETOS ---
+  async getObjetos(): Promise<Objeto[]> {
+    const { data, error } = await supabase.from('objeto').select('*').order('created_at', { ascending: false })
     if (error) throw error
     return data || []
   },
 
-  async saveProjeto(projeto: Omit<Projeto, 'id' | 'created_at'> & { id?: string }): Promise<Projeto> {
-    if (projeto.id) {
-      const { data, error } = await supabase.from('projeto').update(projeto).eq('id', projeto.id).select().single()
+  async saveObjeto(objeto: Omit<Objeto, 'id' | 'created_at'> & { id?: string }): Promise<Objeto> {
+    if (objeto.id) {
+      const { data, error } = await supabase.from('objeto').update(objeto).eq('id', objeto.id).select().single()
       if (error) throw error
       return data
     } else {
       const { data: userData } = await supabase.auth.getUser()
-      const { data, error } = await supabase.from('projeto').insert({ ...projeto, user_id: userData.user?.id }).select().single()
+      const { data, error } = await supabase.from('objeto').insert({ ...objeto, user_id: userData.user?.id }).select().single()
       if (error) throw error
       return data
     }
   },
 
-  async deleteProjeto(id: string): Promise<void> {
-    const { error } = await supabase.from('projeto').delete().eq('id', id)
+  async deleteObjeto(id: string): Promise<void> {
+    const { error } = await supabase.from('objeto').delete().eq('id', id)
     if (error) throw error
   },
 

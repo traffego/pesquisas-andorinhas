@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { dbService, type Pesquisa, type Projeto, type Lider } from '../../services/db'
+import { dbService, type Pesquisa, type Objeto, type Lider } from '../../services/db'
 import { 
   Plus, 
   Edit2, 
@@ -17,7 +17,7 @@ import {
 
 export const Pesquisas: React.FC = () => {
   const [pesquisas, setPesquisas] = useState<Pesquisa[]>([])
-  const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [objetos, setObjetos] = useState<Objeto[]>([])
   const [lideres, setLideres] = useState<Lider[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -26,14 +26,14 @@ export const Pesquisas: React.FC = () => {
   const [id, setId] = useState<string | undefined>(undefined)
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
-  const [projetoId, setProjetoId] = useState<string>('')
+  const [objetoId, setObjetoId] = useState<string>('')
   const [liderId, setLiderId] = useState<string>('')
   const [publicada, setPublicada] = useState(false)
   const [flowData, setFlowData] = useState<any>('{}')
 
   // Quick Add States
-  const [isAddingProjeto, setIsAddingProjeto] = useState(false)
-  const [novoProjetoNome, setNovoProjetoNome] = useState('')
+  const [isAddingObjeto, setIsAddingObjeto] = useState<'projeto' | 'evento' | null>(null)
+  const [novoObjetoNome, setNovoObjetoNome] = useState('')
   const [isAddingLider, setIsAddingLider] = useState(false)
   const [novoLiderNome, setNovoLiderNome] = useState('')
 
@@ -44,13 +44,13 @@ export const Pesquisas: React.FC = () => {
   const loadAllData = async () => {
     setLoading(true)
     try {
-      const [pesqData, projData, lidData] = await Promise.all([
+      const [pesqData, objData, lidData] = await Promise.all([
         dbService.getPesquisas(),
-        dbService.getProjetos(),
+        dbService.getObjetos(),
         dbService.getLideres()
       ])
       setPesquisas(pesqData)
-      setProjetos(projData)
+      setObjetos(objData)
       setLideres(lidData)
     } catch (err) {
       console.error(err)
@@ -73,7 +73,7 @@ export const Pesquisas: React.FC = () => {
     setId(undefined)
     setTitulo('')
     setDescricao('')
-    setProjetoId(projetos[0]?.id || '')
+    setObjetoId(objetos[0]?.id || '')
     setLiderId('')
     setPublicada(false)
     setFlowData({
@@ -90,7 +90,7 @@ export const Pesquisas: React.FC = () => {
     setId(p.id)
     setTitulo(p.titulo)
     setDescricao(p.descricao || '')
-    setProjetoId(p.projeto_id || '')
+    setObjetoId(p.objeto_id || '')
     setLiderId(p.lider_id || '')
     setPublicada(p.publicada)
     setFlowData(p.flow_data)
@@ -109,7 +109,7 @@ export const Pesquisas: React.FC = () => {
         descricao,
         token,
         publicada,
-        projeto_id: projetoId || null,
+        objeto_id: objetoId || null,
         lider_id: liderId || null,
         flow_data: typeof flowData === 'string' ? JSON.parse(flowData) : flowData
       })
@@ -142,17 +142,22 @@ export const Pesquisas: React.FC = () => {
     }
   }
 
-  const handleSaveQuickProjeto = async () => {
-    if (!novoProjetoNome.trim()) return
+  const handleSaveQuickObjeto = async () => {
+    if (!novoObjetoNome.trim() || !isAddingObjeto) return
     try {
-      const novoProj = await dbService.saveProjeto({
-        nome: novoProjetoNome,
-        descricao: ''
+      const novoObj = await dbService.saveObjeto({
+        nome: novoObjetoNome,
+        tipo: isAddingObjeto,
+        descricao: '',
+        termo_fomento: null,
+        codigo_objeto: null,
+        codigo_programa: null,
+        nome_programa: null
       })
-      setProjetos(prev => [novoProj, ...prev])
-      setProjetoId(novoProj.id)
-      setNovoProjetoNome('')
-      setIsAddingProjeto(false)
+      setObjetos(prev => [novoObj, ...prev])
+      setObjetoId(novoObj.id)
+      setNovoObjetoNome('')
+      setIsAddingObjeto(null)
     } catch (err) {
       console.error(err)
     }
@@ -213,7 +218,7 @@ export const Pesquisas: React.FC = () => {
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  <th className="p-4 pl-6">Pesquisa / Projeto</th>
+                  <th className="p-4 pl-6">Pesquisa / Objeto</th>
                   <th className="p-4">Líder</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Link Público</th>
@@ -222,7 +227,7 @@ export const Pesquisas: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-border">
                 {pesquisas.map((p) => {
-                  const proj = projetos.find(pr => pr.id === p.projeto_id)
+                  const obj = objetos.find(ob => ob.id === p.objeto_id)
                   const lid = lideres.find(l => l.id === p.lider_id)
 
                   return (
@@ -231,7 +236,7 @@ export const Pesquisas: React.FC = () => {
                         <div>
                           <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{p.titulo}</p>
                           <span className="text-[10px] text-muted-foreground font-medium">
-                            Projeto: {proj?.nome || <span className="italic text-muted-foreground/60">Sem projeto</span>}
+                            Objeto: {obj ? `${obj.tipo === 'projeto' ? '📁' : '📅'} ${obj.nome}` : <span className="italic text-muted-foreground/60">Sem objeto</span>}
                           </span>
                         </div>
                       </td>
@@ -368,24 +373,24 @@ export const Pesquisas: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  {isAddingProjeto ? (
+                  {isAddingObjeto ? (
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        Novo Projeto
+                        Novo {isAddingObjeto === 'projeto' ? 'Projeto' : 'Evento'}
                       </label>
                       <div className="flex gap-2 items-center">
                         <input
                           type="text"
                           required
                           placeholder="Nome..."
-                          value={novoProjetoNome}
-                          onChange={(e) => setNovoProjetoNome(e.target.value)}
+                          value={novoObjetoNome}
+                          onChange={(e) => setNovoObjetoNome(e.target.value)}
                           className="flex-1 min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                           autoFocus
                         />
                         <button
                           type="button"
-                          onClick={handleSaveQuickProjeto}
+                          onClick={handleSaveQuickObjeto}
                           className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer transition-colors"
                           title="Salvar"
                         >
@@ -394,8 +399,8 @@ export const Pesquisas: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            setIsAddingProjeto(false)
-                            setNovoProjetoNome('')
+                            setIsAddingObjeto(null)
+                            setNovoObjetoNome('')
                           }}
                           className="p-2 bg-muted hover:bg-card border border-border text-muted-foreground hover:text-foreground rounded-xl cursor-pointer transition-colors"
                           title="Cancelar"
@@ -406,26 +411,40 @@ export const Pesquisas: React.FC = () => {
                     </div>
                   ) : (
                     <div>
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center mb-1.5">
                         <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Projeto Associado
+                          Objeto Associado
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingProjeto(true)}
-                          className="text-[10px] text-primary font-bold hover:opacity-80 cursor-pointer flex items-center gap-0.5"
-                        >
-                          <Plus className="h-2.5 w-2.5" /> Novo
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingObjeto('projeto')}
+                            className="text-[9px] text-primary font-bold hover:opacity-80 cursor-pointer flex items-center gap-0.5"
+                            title="Novo Projeto"
+                          >
+                            <Plus className="h-2 w-2" /> Proj
+                          </button>
+                          <span className="text-[9px] text-muted-foreground/40">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingObjeto('evento')}
+                            className="text-[9px] text-purple-600 dark:text-purple-400 font-bold hover:opacity-80 cursor-pointer flex items-center gap-0.5"
+                            title="Novo Evento"
+                          >
+                            <Plus className="h-2 w-2" /> Evento
+                          </button>
+                        </div>
                       </div>
                       <select
-                        value={projetoId}
-                        onChange={(e) => setProjetoId(e.target.value)}
+                        value={objetoId}
+                        onChange={(e) => setObjetoId(e.target.value)}
                         className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
                       >
-                        <option value="">Sem projeto</option>
-                        {projetos.map(proj => (
-                          <option key={proj.id} value={proj.id}>{proj.nome}</option>
+                        <option value="">Sem objeto</option>
+                        {objetos.map(obj => (
+                          <option key={obj.id} value={obj.id}>
+                            {obj.tipo === 'projeto' ? '📁' : '📅'} {obj.nome}
+                          </option>
                         ))}
                       </select>
                     </div>

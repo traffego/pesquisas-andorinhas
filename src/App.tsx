@@ -4,7 +4,7 @@ import { AdminLayout } from './components/AdminLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 import { Dashboard } from './pages/admin/Dashboard'
-import { Projetos } from './pages/admin/Projetos'
+import { Objetos } from './pages/admin/Objetos'
 import { Lideres } from './pages/admin/Lideres'
 import { Pesquisas } from './pages/admin/Pesquisas'
 import { Builder } from './pages/admin/Builder'
@@ -32,7 +32,7 @@ function App() {
           }
         >
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="projetos" element={<Projetos />} />
+          <Route path="objetos" element={<Objetos />} />
           <Route path="lideres" element={<Lideres />} />
           <Route path="pesquisas" element={<Pesquisas />} />
           <Route path="pesquisas/:id/builder" element={<Builder />} />

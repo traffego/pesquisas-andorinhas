@@ -1,11 +1,16 @@
 -- Habilitar extensão UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. Tabela de Projetos
-CREATE TABLE IF NOT EXISTS projeto (
+-- 1. Tabela de Objetos (Projeto ou Evento)
+CREATE TABLE IF NOT EXISTS objeto (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome TEXT NOT NULL,
   descricao TEXT,
+  tipo TEXT CHECK (tipo IN ('projeto', 'evento')) NOT NULL DEFAULT 'projeto',
+  termo_fomento TEXT,
+  codigo_objeto TEXT,
+  codigo_programa TEXT,
+  nome_programa TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid()
 );
@@ -27,7 +32,7 @@ CREATE TABLE IF NOT EXISTS pesquisa (
   descricao TEXT,
   token TEXT UNIQUE NOT NULL,
   publicada BOOLEAN DEFAULT false NOT NULL,
-  projeto_id UUID REFERENCES projeto(id) ON DELETE CASCADE,
+  objeto_id UUID REFERENCES objeto(id) ON DELETE CASCADE,
   lider_id UUID REFERENCES lider(id) ON DELETE SET NULL,
   flow_data JSONB DEFAULT '{}'::jsonb NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -66,7 +71,7 @@ CREATE TABLE IF NOT EXISTS resposta_item (
 -- HABILITAR RLS (ROW LEVEL SECURITY)
 -- ==========================================
 
-ALTER TABLE projeto ENABLE ROW LEVEL SECURITY;
+ALTER TABLE objeto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lider ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pesquisa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pergunta ENABLE ROW LEVEL SECURITY;
@@ -74,10 +79,10 @@ ALTER TABLE resposta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resposta_item ENABLE ROW LEVEL SECURITY;
 
 -- ==========================================
--- POLÍTICAS RLS (PROJETO)
+-- POLÍTICAS RLS (OBJETO)
 -- ==========================================
 
-CREATE POLICY "Dono gerencia seus projetos" ON projeto
+CREATE POLICY "Dono gerencia seus objetos" ON objeto
   FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
@@ -149,6 +154,5 @@ CREATE POLICY "Dono visualiza itens das respostas das suas pesquisas" ON respost
   FOR SELECT TO authenticated
   USING (EXISTS (
     SELECT 1 FROM resposta 
-    JOIN pesquisa ON pesquisa.id = resposta.pesquisa_id 
     WHERE resposta.id = resposta_item.resposta_id AND pesquisa.user_id = auth.uid()
   ));

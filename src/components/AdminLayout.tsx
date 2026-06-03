@@ -27,7 +27,7 @@ export const AdminLayout: React.FC = () => {
 
   const menuItems = [
     { label: 'Painel Geral', path: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Projetos', path: '/admin/projetos', icon: FolderGit2 },
+    { label: 'Objetos', path: '/admin/objetos', icon: FolderGit2 },
     { label: 'Líderes', path: '/admin/lideres', icon: Users2 },
     { label: 'Pesquisas', path: '/admin/pesquisas', icon: ClipboardList },
   ]

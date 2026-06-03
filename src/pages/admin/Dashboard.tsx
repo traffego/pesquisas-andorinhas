@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { dbService, type Projeto, type Lider, type Pesquisa } from '../../services/db'
+import { dbService, type Objeto, type Lider, type Pesquisa } from '../../services/db'
 import { 
   FolderGit2, 
   Users2, 
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 export const Dashboard: React.FC = () => {
-  const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [objetos, setObjetos] = useState<Objeto[]>([])
   const [lideres, setLideres] = useState<Lider[]>([])
   const [pesquisas, setPesquisas] = useState<Pesquisa[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,12 +22,12 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     async function loadData() {
       try {
-        const [projData, lidData, pesqData] = await Promise.all([
-          dbService.getProjetos(),
+        const [objData, lidData, pesqData] = await Promise.all([
+          dbService.getObjetos(),
           dbService.getLideres(),
           dbService.getPesquisas()
         ])
-        setProjetos(projData)
+        setObjetos(objData)
         setLideres(lidData)
         setPesquisas(pesqData)
       } catch (err) {
@@ -48,7 +48,7 @@ export const Dashboard: React.FC = () => {
   }
 
   const metricas = [
-    { label: 'Projetos', valor: projetos.length, icon: FolderGit2, color: 'from-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20', path: '/admin/projetos' },
+    { label: 'Objetos', valor: objetos.length, icon: FolderGit2, color: 'from-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20', path: '/admin/objetos' },
     { label: 'Líderes', valor: lideres.length, icon: Users2, color: 'from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', path: '/admin/lideres' },
     { label: 'Pesquisas', valor: pesquisas.length, icon: ClipboardList, color: 'from-primary/10 to-violet-500/10 text-primary border-primary/20', path: '/admin/pesquisas' },
   ]
@@ -126,7 +126,7 @@ export const Dashboard: React.FC = () => {
           ) : (
             <div className="divide-y divide-border">
               {pesquisas.slice(0, 5).map((p) => {
-                const proj = projetos.find(proj => proj.id === p.projeto_id)
+                const obj = objetos.find(obj => obj.id === p.objeto_id)
                 return (
                   <div key={p.id} className="py-4 flex items-center justify-between gap-4 first:pt-0 last:pb-0 group">
                     <div className="min-w-0">
@@ -134,9 +134,9 @@ export const Dashboard: React.FC = () => {
                         {p.titulo}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        {proj && (
+                        {obj && (
                           <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium border border-border">
-                            {proj.nome}
+                            {obj.tipo === 'projeto' ? '📁' : '📅'} {obj.nome}
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground">
@@ -169,26 +169,28 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Projetos Rápidos */}
+        {/* Objetos Rápidos */}
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
           <div className="flex justify-between items-center border-b border-border pb-4">
-            <h3 className="font-bold text-foreground">Projetos Ativos</h3>
-            <Link to="/admin/projetos" className="text-xs text-primary hover:underline font-semibold">Ver todos</Link>
+            <h3 className="font-bold text-foreground">Objetos Ativos</h3>
+            <Link to="/admin/objetos" className="text-xs text-primary hover:underline font-semibold">Ver todos</Link>
           </div>
 
-          {projetos.length === 0 ? (
+          {objetos.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              Nenhum projeto cadastrado.
+              Nenhum objeto cadastrado.
             </div>
           ) : (
             <div className="space-y-3">
-              {projetos.slice(0, 4).map((p) => {
-                const count = pesquisas.filter(pesq => pesq.projeto_id === p.id).length
+              {objetos.slice(0, 4).map((obj) => {
+                const count = pesquisas.filter(pesq => pesq.objeto_id === obj.id).length
                 return (
-                  <div key={p.id} className="p-3 bg-muted/50 rounded-xl border border-border flex items-center justify-between">
+                  <div key={obj.id} className="p-3 bg-muted/50 rounded-xl border border-border flex items-center justify-between">
                     <div className="min-w-0 pr-2">
-                      <p className="text-xs font-bold text-foreground truncate">{p.nome}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{p.descricao || 'Sem descrição'}</p>
+                      <p className="text-xs font-bold text-foreground truncate">
+                        {obj.tipo === 'projeto' ? '📁' : '📅'} {obj.nome}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{obj.descricao || 'Sem descrição'}</p>
                     </div>
                     <span className="text-xs bg-card text-primary border border-border px-2.5 py-1 rounded-lg font-bold shrink-0">
                       {count} {count === 1 ? 'Pesq.' : 'Pesqs.'}
