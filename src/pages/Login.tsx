@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Bird, ShieldAlert, ArrowRight, Sparkles } from 'lucide-react'
+import { ShieldAlert, ArrowRight, Sparkles } from 'lucide-react'
+import logoImg from '../assets/logo.png'
 
 export const Login: React.FC = () => {
   const { user, isMocked, signInWithMock } = useAuth()
@@ -77,13 +78,8 @@ export const Login: React.FC = () => {
       <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-8 shadow-2xl relative z-10">
         {/* Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="bg-primary/10 p-3 rounded-2xl text-primary border border-primary/20 mb-4">
-            <Bird className="h-8 w-8" />
-          </div>
-          <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-blue-600 dark:to-blue-400 bg-clip-text text-transparent">
-            Andorinha
-          </h2>
-          <p className="text-muted-foreground text-sm mt-2 text-center">
+          <img src={logoImg} alt="Andorinha Logo" className="h-12 w-auto object-contain mb-4 dark:invert dark:brightness-200" />
+          <p className="text-muted-foreground text-sm text-center">
             {isMocked 
               ? 'Conectando no modo de simulação offline.'
               : 'Faça login para gerenciar suas pesquisas.'}

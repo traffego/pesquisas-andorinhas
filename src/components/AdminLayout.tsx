@@ -2,13 +2,13 @@ import React from 'react'
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import logoImg from '../assets/logo.png'
 import { 
   LayoutDashboard, 
   FolderGit2, 
   Users2, 
   ClipboardList, 
   LogOut, 
-  Bird, 
   DatabaseZap,
   Info,
   Sun,
@@ -40,16 +40,8 @@ export const AdminLayout: React.FC = () => {
       {/* Sidebar */}
       <aside className="w-64 border-r border-border bg-card/50 backdrop-blur-md flex flex-col">
         {/* Logo */}
-        <div className="p-6 border-b border-border flex items-center gap-3">
-          <div className="bg-primary/10 p-2 rounded-xl text-primary border border-primary/20">
-            <Bird className="h-6 w-6 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-violet-500 bg-clip-text text-transparent">
-              Andorinha
-            </h1>
-            <p className="text-xs text-muted-foreground">Gestão de Pesquisas</p>
-          </div>
+        <div className="p-5 border-b border-border flex items-center justify-center">
+          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:invert dark:brightness-200" />
         </div>
 
         {/* Navigation */}
