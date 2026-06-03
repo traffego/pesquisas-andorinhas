@@ -11,7 +11,8 @@ import {
   Share2, 
   BarChart3, 
   Globe, 
-  EyeOff 
+  EyeOff,
+  Check
 } from 'lucide-react'
 
 export const Pesquisas: React.FC = () => {
@@ -29,6 +30,12 @@ export const Pesquisas: React.FC = () => {
   const [liderId, setLiderId] = useState<string>('')
   const [publicada, setPublicada] = useState(false)
   const [flowData, setFlowData] = useState<any>('{}')
+
+  // Quick Add States
+  const [isAddingProjeto, setIsAddingProjeto] = useState(false)
+  const [novoProjetoNome, setNovoProjetoNome] = useState('')
+  const [isAddingLider, setIsAddingLider] = useState(false)
+  const [novoLiderNome, setNovoLiderNome] = useState('')
 
   useEffect(() => {
     loadAllData()
@@ -130,6 +137,39 @@ export const Pesquisas: React.FC = () => {
         publicada: !p.publicada
       })
       loadAllData()
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleSaveQuickProjeto = async () => {
+    if (!novoProjetoNome.trim()) return
+    try {
+      const novoProj = await dbService.saveProjeto({
+        nome: novoProjetoNome,
+        descricao: ''
+      })
+      setProjetos(prev => [novoProj, ...prev])
+      setProjetoId(novoProj.id)
+      setNovoProjetoNome('')
+      setIsAddingProjeto(false)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleSaveQuickLider = async () => {
+    if (!novoLiderNome.trim()) return
+    try {
+      const novoLid = await dbService.saveLider({
+        nome: novoLiderNome,
+        telefone: null,
+        email: null
+      })
+      setLideres(prev => [novoLid, ...prev])
+      setLiderId(novoLid.id)
+      setNovoLiderNome('')
+      setIsAddingLider(false)
     } catch (err) {
       console.error(err)
     }
@@ -328,35 +368,133 @@ export const Pesquisas: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    Projeto Associado
-                  </label>
-                  <select
-                    value={projetoId}
-                    onChange={(e) => setProjetoId(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-                  >
-                    <option value="">Sem projeto</option>
-                    {projetos.map(proj => (
-                      <option key={proj.id} value={proj.id}>{proj.nome}</option>
-                    ))}
-                  </select>
+                  {isAddingProjeto ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Novo Projeto
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nome..."
+                          value={novoProjetoNome}
+                          onChange={(e) => setNovoProjetoNome(e.target.value)}
+                          className="flex-1 min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveQuickProjeto}
+                          className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer transition-colors"
+                          title="Salvar"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingProjeto(false)
+                            setNovoProjetoNome('')
+                          }}
+                          className="p-2 bg-muted hover:bg-card border border-border text-muted-foreground hover:text-foreground rounded-xl cursor-pointer transition-colors"
+                          title="Cancelar"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Projeto Associado
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingProjeto(true)}
+                          className="text-[10px] text-primary font-bold hover:opacity-80 cursor-pointer flex items-center gap-0.5"
+                        >
+                          <Plus className="h-2.5 w-2.5" /> Novo
+                        </button>
+                      </div>
+                      <select
+                        value={projetoId}
+                        onChange={(e) => setProjetoId(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                      >
+                        <option value="">Sem projeto</option>
+                        {projetos.map(proj => (
+                          <option key={proj.id} value={proj.id}>{proj.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    Líder Associado
-                  </label>
-                  <select
-                    value={liderId}
-                    onChange={(e) => setLiderId(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-                  >
-                    <option value="">Nenhum líder</option>
-                    {lideres.map(lid => (
-                      <option key={lid.id} value={lid.id}>{lid.nome}</option>
-                    ))}
-                  </select>
+                  {isAddingLider ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        Novo Líder
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nome..."
+                          value={novoLiderNome}
+                          onChange={(e) => setNovoLiderNome(e.target.value)}
+                          className="flex-1 min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveQuickLider}
+                          className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer transition-colors"
+                          title="Salvar"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingLider(false)
+                            setNovoLiderNome('')
+                          }}
+                          className="p-2 bg-muted hover:bg-card border border-border text-muted-foreground hover:text-foreground rounded-xl cursor-pointer transition-colors"
+                          title="Cancelar"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Líder Associado
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingLider(true)}
+                          className="text-[10px] text-primary font-bold hover:opacity-80 cursor-pointer flex items-center gap-0.5"
+                        >
+                          <Plus className="h-2.5 w-2.5" /> Novo
+                        </button>
+                      </div>
+                      <select
+                        value={liderId}
+                        onChange={(e) => setLiderId(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                      >
+                        <option value="">Nenhum líder</option>
+                        {lideres.map(lid => (
+                          <option key={lid.id} value={lid.id}>{lid.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
