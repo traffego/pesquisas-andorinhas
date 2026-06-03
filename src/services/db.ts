@@ -90,6 +90,12 @@ export const dbService = {
     if (error) throw error
   },
 
+  async getObjetoById(id: string): Promise<Objeto | null> {
+    const { data, error } = await supabase.from('objeto').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data
+  },
+
   // --- LÍDERES ---
   async getLideres(): Promise<Lider[]> {
     const { data, error } = await supabase.from('lider').select('*').order('created_at', { ascending: false })
@@ -113,6 +119,12 @@ export const dbService = {
   async deleteLider(id: string): Promise<void> {
     const { error } = await supabase.from('lider').delete().eq('id', id)
     if (error) throw error
+  },
+
+  async getLiderById(id: string): Promise<Lider | null> {
+    const { data, error } = await supabase.from('lider').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data
   },
 
   // --- PESQUISAS ---

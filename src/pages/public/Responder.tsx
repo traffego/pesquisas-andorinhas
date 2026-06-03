@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { dbService, type Pesquisa, type Pergunta } from '../../services/db'
+import { dbService, type Pesquisa, type Pergunta, type Objeto, type Lider } from '../../services/db'
+import logoImg from '../../assets/logo.png'
 import { 
-  Bird, 
   CheckCircle2, 
   ChevronRight, 
   Lock, 
@@ -28,6 +28,10 @@ export const Responder: React.FC = () => {
   // Resposta da tela atual
   const [valorAtual, setValorAtual] = useState<any>('')
   const [validacaoErro, setValidacaoErro] = useState('')
+
+  // Objeto e Líder Relacionados
+  const [objetoRelacionado, setObjetoRelacionado] = useState<Objeto | null>(null)
+  const [liderRelacionado, setLiderRelacionado] = useState<Lider | null>(null)
 
   // Gera ou lê fingerprint do localStorage
   const getDeviceFingerprint = () => {
@@ -63,6 +67,14 @@ export const Responder: React.FC = () => {
       }
       setPesquisa(pesq)
       setFlowData(pesq.flow_data)
+
+      // Carrega Objeto e Líder relacionados de forma assíncrona se existirem
+      if (pesq.objeto_id) {
+        dbService.getObjetoById(pesq.objeto_id).then(setObjetoRelacionado).catch(console.error)
+      }
+      if (pesq.lider_id) {
+        dbService.getLiderById(pesq.lider_id).then(setLiderRelacionado).catch(console.error)
+      }
 
       // 2. Prevenção de duplicados
       const jaRespondeu = await dbService.hasDeviceResponded(pesq.id, fp)
@@ -336,12 +348,27 @@ export const Responder: React.FC = () => {
       </div>
 
       {/* Header */}
-      <header className="py-6 px-6 border-b border-border/60 flex items-center justify-between shrink-0 bg-card/10 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <Bird className="h-5 w-5 text-primary" />
-          <span className="text-xs font-extrabold tracking-widest text-foreground uppercase">Andorinha</span>
+      <header className="py-6 px-6 border-b border-border/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 bg-card/10 backdrop-blur-sm">
+        <div className="flex items-start md:items-center gap-4">
+          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1.5 shrink-0" />
+          <div className="h-8 w-[1px] bg-border hidden md:block"></div>
+          <div className="space-y-1">
+            {objetoRelacionado && (
+              <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-foreground bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider flex items-center gap-1">
+                  {objetoRelacionado.tipo === 'projeto' ? '📁' : '📅'} {objetoRelacionado.tipo}
+                </span>
+                <span className="font-semibold text-foreground">{objetoRelacionado.nome}</span>
+              </div>
+            )}
+            {liderRelacionado && (
+              <div className="text-[10px] font-semibold text-muted-foreground">
+                Líder Responsável: <span className="text-foreground">{liderRelacionado.nome}</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="text-[10px] bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-bold border border-border">
+        <div className="text-[10px] bg-muted text-muted-foreground px-3 py-1 rounded-full font-bold border border-border w-fit shrink-0">
           {getProgresso()}% Concluído
         </div>
       </header>

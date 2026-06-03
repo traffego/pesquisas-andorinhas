@@ -87,6 +87,10 @@ CREATE POLICY "Dono gerencia seus objetos" ON objeto
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Leitura pública de objetos" ON objeto
+  FOR SELECT TO public
+  USING (true);
+
 -- ==========================================
 -- POLÍTICAS RLS (LÍDER)
 -- ==========================================
@@ -95,6 +99,10 @@ CREATE POLICY "Dono gerencia seus lideres" ON lider
   FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Leitura pública de lideres" ON lider
+  FOR SELECT TO public
+  USING (true);
 
 -- ==========================================
 -- POLÍTICAS RLS (PESQUISA)
