@@ -41,7 +41,7 @@ export const AdminLayout: React.FC = () => {
       <aside className="w-64 border-r border-border bg-card/50 backdrop-blur-md flex flex-col">
         {/* Logo */}
         <div className="p-5 border-b border-border flex items-center justify-center">
-          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:invert dark:brightness-200" />
+          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1" />
         </div>
 
         {/* Navigation */}
