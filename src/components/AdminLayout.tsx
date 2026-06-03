@@ -8,15 +8,14 @@ import {
   FolderGit2, 
   Users2, 
   ClipboardList, 
-  LogOut, 
+  LogOut,
   DatabaseZap,
-  Info,
   Sun,
   Moon
 } from 'lucide-react'
 
 export const AdminLayout: React.FC = () => {
-  const { user, signOut, isMocked } = useAuth()
+  const { user, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -66,23 +65,12 @@ export const AdminLayout: React.FC = () => {
           })}
         </nav>
 
-        {/* User Info / Banner Mock */}
+        {/* User Info */}
         <div className="p-4 border-t border-border space-y-3">
-          {isMocked && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-600 dark:text-amber-300 flex gap-2">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold">Modo Demo Local</p>
-                <p className="opacity-80 mt-0.5">Dados salvos no navegador. Configure o .env para usar Supabase real.</p>
-              </div>
-            </div>
-          )}
-          {!isMocked && (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-              <DatabaseZap className="h-4 w-4" />
-              <span className="font-medium">Supabase Conectado</span>
-            </div>
-          )}
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+            <DatabaseZap className="h-4 w-4" />
+            <span className="font-medium">Supabase Conectado</span>
+          </div>
 
           <div className="flex items-center justify-between gap-3 px-2">
             <div className="overflow-hidden">
@@ -109,7 +97,6 @@ export const AdminLayout: React.FC = () => {
             {menuItems.find(i => isActive(i.path))?.label || 'Painel'}
           </h2>
           <div className="flex items-center gap-4">
-            {/* Botão de Alternância de Tema */}
             <button
               onClick={toggleTheme}
               className="p-2.5 rounded-xl border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-sm"

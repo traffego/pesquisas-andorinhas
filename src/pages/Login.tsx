@@ -2,11 +2,11 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { ShieldAlert, ArrowRight, Sparkles } from 'lucide-react'
+import { ShieldAlert, ArrowRight } from 'lucide-react'
 import logoImg from '../assets/logo.png'
 
 export const Login: React.FC = () => {
-  const { user, isMocked, signInWithMock } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
@@ -15,7 +15,6 @@ export const Login: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Se o usuário já estiver logado, redireciona
   React.useEffect(() => {
     if (user) {
       navigate('/admin/dashboard')
@@ -27,33 +26,20 @@ export const Login: React.FC = () => {
     setErrorMsg('')
     setLoading(true)
 
-    if (isMocked) {
-      // Simula login
-      signInWithMock(email || 'demo@andorinha.dev')
-      setLoading(false)
-      navigate('/admin/dashboard')
-      return
-    }
-
     try {
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              nome: email.split('@')[0]
-            }
+            data: { nome: email.split('@')[0] }
           }
         })
         if (error) throw error
-        setErrorMsg('Conta criada com sucesso! Verifique seu e-mail de confirmação ou faça o login.')
+        setErrorMsg('Conta criada! Verifique seu e-mail de confirmação.')
         setIsSignUp(false)
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         navigate('/admin/dashboard')
       }
@@ -62,11 +48,6 @@ export const Login: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleDemoLogin = () => {
-    signInWithMock('demo@andorinha.dev')
-    navigate('/admin/dashboard')
   }
 
   return (
@@ -80,16 +61,14 @@ export const Login: React.FC = () => {
         <div className="flex flex-col items-center mb-8">
           <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain mb-4 dark:bg-white dark:rounded-xl dark:p-2" />
           <p className="text-muted-foreground text-sm text-center">
-            {isMocked 
-              ? 'Conectando no modo de simulação offline.'
-              : 'Faça login para gerenciar suas pesquisas.'}
+            Faça login para gerenciar suas pesquisas.
           </p>
         </div>
 
         {errorMsg && (
           <div className={`mb-6 p-4 rounded-xl border flex gap-3 text-sm ${
-            errorMsg.includes('sucesso') 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+            errorMsg.includes('criada')
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
               : 'bg-destructive/10 border-destructive/20 text-destructive'
           }`}>
             <ShieldAlert className="h-5 w-5 shrink-0" />
@@ -112,21 +91,19 @@ export const Login: React.FC = () => {
             />
           </div>
 
-          {!isMocked && (
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Senha
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Sua senha secreta"
-                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Senha
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Sua senha secreta"
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+            />
+          </div>
 
           <button
             type="submit"
@@ -144,28 +121,14 @@ export const Login: React.FC = () => {
           </button>
         </form>
 
-        {isMocked && (
-          <div className="mt-6 border-t border-border pt-6">
-            <button
-              onClick={handleDemoLogin}
-              className="w-full rounded-xl border border-border bg-background py-3 font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm text-sm"
-            >
-              <Sparkles className="h-4 w-4 text-primary" />
-              Entrar direto como Admin Demo
-            </button>
-          </div>
-        )}
-
-        {!isMocked && (
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-primary hover:underline font-medium"
-            >
-              {isSignUp ? 'Já tem conta? Entrar agora' : 'Não tem conta? Cadastrar-se'}
-            </button>
-          </div>
-        )}
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          <button
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-primary hover:underline font-medium"
+          >
+            {isSignUp ? 'Já tem conta? Entrar agora' : 'Não tem conta? Cadastrar-se'}
+          </button>
+        </div>
       </div>
     </div>
   )
