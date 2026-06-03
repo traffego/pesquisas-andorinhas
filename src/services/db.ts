@@ -47,7 +47,7 @@ export interface Pesquisa {
 export interface Pergunta {
   id: string
   fluxo_id: string
-  tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email'
+  tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email' | 'cpf' | 'cep'
   titulo: string
   obrigatoria: boolean
   ordem: number

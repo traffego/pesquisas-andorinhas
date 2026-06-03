@@ -598,6 +598,8 @@ export const Builder: React.FC = () => {
                   <option value="multipla">Múltipla Escolha</option>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="email">E-mail</option>
+                  <option value="cpf">CPF</option>
+                  <option value="cep">CEP</option>
                 </select>
               </div>
 

@@ -168,6 +168,20 @@ export const Responder: React.FC = () => {
     return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`
   }
 
+  const applyCpfMask = (val: string) => {
+    const n = val.replace(/\D/g, '').slice(0, 11)
+    if (n.length <= 3) return n
+    if (n.length <= 6) return `${n.slice(0, 3)}.${n.slice(3)}`
+    if (n.length <= 9) return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6)}`
+    return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`
+  }
+
+  const applyCepMask = (val: string) => {
+    const n = val.replace(/\D/g, '').slice(0, 8)
+    if (n.length <= 5) return n
+    return `${n.slice(0, 5)}-${n.slice(5)}`
+  }
+
   // --- SELEÇÃO DE MÚLTIPLA ESCOLHA ---
   const handleToggleOpcao = (opcaoId: string) => {
     const selecionadas = Array.isArray(valorAtual) ? [...valorAtual] : []
@@ -234,6 +248,22 @@ export const Responder: React.FC = () => {
           const digits = txt.replace(/\D/g, '')
           if (digits.length < 10 || digits.length > 11) {
             setValidacaoErro('Por favor, insira o número de celular completo com DDD.')
+            return false
+          }
+        }
+
+        if (perguntaAtual.tipo === 'cpf') {
+          const digits = txt.replace(/\D/g, '')
+          if (digits.length !== 11) {
+            setValidacaoErro('CPF inválido. Informe os 11 dígitos.')
+            return false
+          }
+        }
+
+        if (perguntaAtual.tipo === 'cep') {
+          const digits = txt.replace(/\D/g, '')
+          if (digits.length !== 8) {
+            setValidacaoErro('CEP inválido. Informe os 8 dígitos.')
             return false
           }
         }
@@ -615,7 +645,41 @@ export const Responder: React.FC = () => {
                 />
               )}
 
-              {/* 5. Múltipla Escolha */}
+              {/* 5. CPF */}
+              {perguntaAtual.tipo === 'cpf' && (
+                <input
+                  type="text"
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    const masked = applyCpfMask(e.target.value)
+                    setValorAtual(masked)
+                    setValidacaoErro('')
+                  }}
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  inputMode="numeric"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                />
+              )}
+
+              {/* 6. CEP */}
+              {perguntaAtual.tipo === 'cep' && (
+                <input
+                  type="text"
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    const masked = applyCepMask(e.target.value)
+                    setValorAtual(masked)
+                    setValidacaoErro('')
+                  }}
+                  placeholder="00000-000"
+                  maxLength={9}
+                  inputMode="numeric"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                />
+              )}
+
+              {/* 7. Múltipla Escolha */}
               {perguntaAtual.tipo === 'multipla' && (
                 <div className="space-y-2.5">
                   {(perguntaAtual.config?.opcoes || []).map((opcao) => {
