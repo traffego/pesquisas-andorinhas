@@ -261,9 +261,9 @@ export const Responder: React.FC = () => {
 
       await dbService.saveRespostaCompleta(pesquisa.id, deviceFp, itens)
       setRespondeu(true)
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      setErrorMsg('Ocorreu um erro ao gravar suas respostas. Tente novamente.')
+      setErrorMsg(err.message || 'Ocorreu um erro ao gravar suas respostas. Tente novamente.')
     } finally {
       setLoading(false)
     }
