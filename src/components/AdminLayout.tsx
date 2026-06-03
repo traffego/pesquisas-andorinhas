@@ -11,7 +11,8 @@ import {
   LogOut,
   DatabaseZap,
   Sun,
-  Moon
+  Moon,
+  GitFork
 } from 'lucide-react'
 
 export const AdminLayout: React.FC = () => {
@@ -29,6 +30,7 @@ export const AdminLayout: React.FC = () => {
     { label: 'Painel Geral', path: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Objetos', path: '/admin/objetos', icon: FolderGit2 },
     { label: 'Líderes', path: '/admin/lideres', icon: Users2 },
+    { label: 'Fluxos', path: '/admin/fluxos', icon: GitFork },
     { label: 'Pesquisas', path: '/admin/pesquisas', icon: ClipboardList },
   ]
 

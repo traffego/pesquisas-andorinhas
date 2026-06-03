@@ -25,7 +25,17 @@ CREATE TABLE IF NOT EXISTS lider (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid()
 );
 
--- 3. Tabela de Pesquisas
+-- 3. Tabela de Fluxos (logic graph of questions)
+CREATE TABLE IF NOT EXISTS fluxo (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL,
+  descricao TEXT,
+  flow_data JSONB DEFAULT '{}'::jsonb NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid()
+);
+
+-- 4. Tabela de Pesquisas (instances using a flow)
 CREATE TABLE IF NOT EXISTS pesquisa (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   titulo TEXT NOT NULL,
@@ -34,15 +44,15 @@ CREATE TABLE IF NOT EXISTS pesquisa (
   publicada BOOLEAN DEFAULT false NOT NULL,
   objeto_id UUID REFERENCES objeto(id) ON DELETE CASCADE,
   lider_id UUID REFERENCES lider(id) ON DELETE SET NULL,
-  flow_data JSONB DEFAULT '{}'::jsonb NOT NULL,
+  fluxo_id UUID REFERENCES fluxo(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid()
 );
 
--- 4. Tabela de Perguntas
+-- 5. Tabela de Perguntas (linked to a flow)
 CREATE TABLE IF NOT EXISTS pergunta (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pesquisa_id UUID REFERENCES pesquisa(id) ON DELETE CASCADE,
+  fluxo_id UUID REFERENCES fluxo(id) ON DELETE CASCADE,
   tipo TEXT CHECK (tipo IN ('texto_curto', 'textarea', 'multipla', 'whatsapp', 'email')) NOT NULL,
   titulo TEXT NOT NULL,
   obrigatoria BOOLEAN DEFAULT true NOT NULL,
@@ -51,7 +61,7 @@ CREATE TABLE IF NOT EXISTS pergunta (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 5. Tabela de Respostas (Sessão de resposta)
+-- 6. Tabela de Respostas (Sessão de resposta vinculada a pesquisa)
 CREATE TABLE IF NOT EXISTS resposta (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pesquisa_id UUID REFERENCES pesquisa(id) ON DELETE CASCADE,
@@ -59,7 +69,7 @@ CREATE TABLE IF NOT EXISTS resposta (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 6. Tabela de Itens de Resposta
+-- 7. Tabela de Itens de Resposta
 CREATE TABLE IF NOT EXISTS resposta_item (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   resposta_id UUID REFERENCES resposta(id) ON DELETE CASCADE,
@@ -73,6 +83,7 @@ CREATE TABLE IF NOT EXISTS resposta_item (
 
 ALTER TABLE objeto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lider ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fluxo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pesquisa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pergunta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resposta ENABLE ROW LEVEL SECURITY;
@@ -105,6 +116,22 @@ CREATE POLICY "Leitura pública de lideres" ON lider
   USING (true);
 
 -- ==========================================
+-- POLÍTICAS RLS (FLUXO)
+-- ==========================================
+
+CREATE POLICY "Dono gerencia seus fluxos" ON fluxo
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Leitura pública de fluxos de pesquisas publicadas" ON fluxo
+  FOR SELECT TO public
+  USING (EXISTS (
+    SELECT 1 FROM pesquisa
+    WHERE pesquisa.fluxo_id = fluxo.id AND pesquisa.publicada = true
+  ));
+
+-- ==========================================
 -- POLÍTICAS RLS (PESQUISA)
 -- ==========================================
 
@@ -121,18 +148,18 @@ CREATE POLICY "Leitura pública de pesquisas publicadas" ON pesquisa
 -- POLÍTICAS RLS (PERGUNTA)
 -- ==========================================
 
-CREATE POLICY "Dono gerencia perguntas das suas pesquisas" ON pergunta
+CREATE POLICY "Dono gerencia perguntas dos seus fluxos" ON pergunta
   FOR ALL TO authenticated
   USING (EXISTS (
-    SELECT 1 FROM pesquisa 
-    WHERE pesquisa.id = pergunta.pesquisa_id AND pesquisa.user_id = auth.uid()
+    SELECT 1 FROM fluxo 
+    WHERE fluxo.id = pergunta.fluxo_id AND fluxo.user_id = auth.uid()
   ));
 
-CREATE POLICY "Leitura pública de perguntas de pesquisas publicadas" ON pergunta
+CREATE POLICY "Leitura pública de perguntas de fluxos de pesquisas publicadas" ON pergunta
   FOR SELECT TO public
   USING (EXISTS (
     SELECT 1 FROM pesquisa 
-    WHERE pesquisa.id = pergunta.pesquisa_id AND pesquisa.publicada = true
+    WHERE pesquisa.fluxo_id = pergunta.fluxo_id AND pesquisa.publicada = true
   ));
 
 -- ==========================================

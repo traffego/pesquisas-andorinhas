@@ -22,6 +22,15 @@ export interface Lider {
   created_at?: string
 }
 
+export interface Fluxo {
+  id: string
+  nome: string
+  descricao: string | null
+  flow_data: any
+  user_id?: string
+  created_at?: string
+}
+
 export interface Pesquisa {
   id: string
   titulo: string
@@ -30,14 +39,14 @@ export interface Pesquisa {
   publicada: boolean
   objeto_id: string | null
   lider_id: string | null
-  flow_data: any
+  fluxo_id: string | null
   user_id?: string
   created_at?: string
 }
 
 export interface Pergunta {
   id: string
-  pesquisa_id: string
+  fluxo_id: string
   tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email'
   titulo: string
   obrigatoria: boolean
@@ -127,6 +136,37 @@ export const dbService = {
     return data
   },
 
+  // --- FLUXOS ---
+  async getFluxos(): Promise<Fluxo[]> {
+    const { data, error } = await supabase.from('fluxo').select('*').order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async getFluxoById(id: string): Promise<Fluxo | null> {
+    const { data, error } = await supabase.from('fluxo').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data
+  },
+
+  async saveFluxo(fluxo: Omit<Fluxo, 'id' | 'created_at'> & { id?: string }): Promise<Fluxo> {
+    if (fluxo.id) {
+      const { data, error } = await supabase.from('fluxo').update(fluxo).eq('id', fluxo.id).select().single()
+      if (error) throw error
+      return data
+    } else {
+      const { data: userData } = await supabase.auth.getUser()
+      const { data, error } = await supabase.from('fluxo').insert({ ...fluxo, user_id: userData.user?.id }).select().single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteFluxo(id: string): Promise<void> {
+    const { error } = await supabase.from('fluxo').delete().eq('id', id)
+    if (error) throw error
+  },
+
   // --- PESQUISAS ---
   async getPesquisas(): Promise<Pesquisa[]> {
     const { data, error } = await supabase.from('pesquisa').select('*').order('created_at', { ascending: false })
@@ -140,8 +180,8 @@ export const dbService = {
     return data
   },
 
-  async getPesquisaByToken(token: string): Promise<Pesquisa | null> {
-    const { data, error } = await supabase.from('pesquisa').select('*').eq('token', token).eq('publicada', true).maybeSingle()
+  async getPesquisaByToken(token: string): Promise<(Pesquisa & { fluxo?: Fluxo }) | null> {
+    const { data, error } = await supabase.from('pesquisa').select('*, fluxo:fluxo_id(*)').eq('token', token).eq('publicada', true).maybeSingle()
     if (error) throw error
     return data
   },
@@ -165,14 +205,14 @@ export const dbService = {
   },
 
   // --- PERGUNTAS ---
-  async getPerguntas(pesquisaId: string): Promise<Pergunta[]> {
-    const { data, error } = await supabase.from('pergunta').select('*').eq('pesquisa_id', pesquisaId).order('ordem', { ascending: true })
+  async getPerguntas(fluxoId: string): Promise<Pergunta[]> {
+    const { data, error } = await supabase.from('pergunta').select('*').eq('fluxo_id', fluxoId).order('ordem', { ascending: true })
     if (error) throw error
     return data || []
   },
 
-  async syncPerguntas(pesquisaId: string, perguntas: Omit<Pergunta, 'created_at'>[]): Promise<void> {
-    await supabase.from('pergunta').delete().eq('pesquisa_id', pesquisaId)
+  async syncPerguntas(fluxoId: string, perguntas: Omit<Pergunta, 'created_at'>[]): Promise<void> {
+    await supabase.from('pergunta').delete().eq('fluxo_id', fluxoId)
     if (perguntas.length > 0) {
       const { error } = await supabase.from('pergunta').insert(perguntas.map(q => {
         const { id, ...rest } = q

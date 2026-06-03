@@ -49,7 +49,7 @@ export const Relatorios: React.FC = () => {
       }
       setPesquisa(pesq)
 
-      const pergs = await dbService.getPerguntas(pesquisaId)
+      const pergs = pesq.fluxo_id ? await dbService.getPerguntas(pesq.fluxo_id) : []
       setPerguntas(pergs)
 
       const data = await dbService.getRelatorios(pesquisaId)

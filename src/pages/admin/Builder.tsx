@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { dbService, type Pesquisa, type Pergunta } from '../../services/db'
+import { dbService, type Fluxo, type Pergunta } from '../../services/db'
 import { StartNode } from '../../components/builder/StartNode'
 import { EndNode } from '../../components/builder/EndNode'
 import { QuestionNode } from '../../components/builder/QuestionNode'
@@ -47,7 +47,7 @@ export const Builder: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  const [pesquisa, setPesquisa] = useState<Pesquisa | null>(null)
+  const [fluxo, setFluxo] = useState<Fluxo | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [loading, setLoading] = useState(true)
@@ -70,15 +70,15 @@ export const Builder: React.FC = () => {
   const [edgeSourceQuestion, setEdgeSourceQuestion] = useState<any | null>(null)
 
   // Estados do subfluxo
-  const [pesquisasDisponiveis, setPesquisasDisponiveis] = useState<Pesquisa[]>([])
+  const [fluxosDisponiveis, setFluxosDisponiveis] = useState<Fluxo[]>([])
   const [isSubflowModalOpen, setIsSubflowModalOpen] = useState(false)
   const [editingSubflowNodeId, setEditingSubflowNodeId] = useState<string | null>(null)
   const [selectedSubflowId, setSelectedSubflowId] = useState<string>('')
 
-  const loadPesquisasDisponiveis = async () => {
+  const loadFluxosDisponiveis = async () => {
     try {
-      const list = await dbService.getPesquisas()
-      setPesquisasDisponiveis(list)
+      const list = await dbService.getFluxos()
+      setFluxosDisponiveis(list)
     } catch (err) {
       console.error(err)
     }
@@ -86,23 +86,23 @@ export const Builder: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-      loadPesquisa(id)
-      loadPesquisasDisponiveis()
+      loadFluxo(id)
+      loadFluxosDisponiveis()
     }
   }, [id])
 
-  const loadPesquisa = async (pesquisaId: string) => {
+  const loadFluxo = async (fluxoId: string) => {
     setLoading(true)
     try {
-      const pesq = await dbService.getPesquisaById(pesquisaId)
-      if (!pesq) {
-        navigate('/admin/pesquisas')
+      const flux = await dbService.getFluxoById(fluxoId)
+      if (!flux) {
+        navigate('/admin/fluxos')
         return
       }
-      setPesquisa(pesq)
+      setFluxo(flux)
 
       // Carregar nós e arestas do flow_data
-      const flow = pesq.flow_data || {}
+      const flow = flux.flow_data || {}
       
       // Mapear callbacks do questionNode e subflowNode nos nós
       const initialNodes = (flow.nodes || []).map((n: Node) => {
@@ -205,8 +205,8 @@ export const Builder: React.FC = () => {
     e.preventDefault()
     if (!selectedSubflowId) return
 
-    const subflowPesquisa = pesquisasDisponiveis.find(p => p.id === selectedSubflowId)
-    const subflowTitulo = subflowPesquisa ? subflowPesquisa.titulo : 'Pesquisa Desconhecida'
+    const subflowFluxo = fluxosDisponiveis.find(f => f.id === selectedSubflowId)
+    const subflowTitulo = subflowFluxo ? subflowFluxo.nome : 'Fluxo Desconhecido'
 
     if (editingSubflowNodeId) {
       setNodes((nds) =>
@@ -419,13 +419,13 @@ export const Builder: React.FC = () => {
   // --- SALVAR FLUXO ---
 
   const handleSaveFlow = async () => {
-    if (!pesquisa) return
+    if (!fluxo) return
 
     // Validações antes de salvar
     // 1. Início conectado a alguma coisa
     const isStartConnected = edges.some(e => e.source === 'start')
     if (!isStartConnected) {
-      alert('Aviso: O nó "Início" não está conectado. Conecte-o a uma pergunta para que a pesquisa possa começar.')
+      alert('Aviso: O nó "Início" não está conectado. Conecte-o a uma pergunta para que o fluxo possa começar.')
       return
     }
 
@@ -456,9 +456,9 @@ export const Builder: React.FC = () => {
         edges
       }
 
-      // 2. Mapeia e atualiza a tabela pesquisa
-      await dbService.savePesquisa({
-        ...pesquisa,
+      // 2. Mapeia e atualiza a tabela fluxo
+      await dbService.saveFluxo({
+        ...fluxo,
         flow_data: flowData
       })
 
@@ -470,7 +470,7 @@ export const Builder: React.FC = () => {
 
       const perguntas: Omit<Pergunta, 'created_at'>[] = sortedQuestions.map((q, idx) => ({
         id: q.id,
-        pesquisa_id: pesquisa.id,
+        fluxo_id: fluxo.id,
         tipo: q.data.tipo as Pergunta['tipo'],
         titulo: q.data.titulo as string,
         obrigatoria: q.data.obrigatoria as boolean,
@@ -478,7 +478,7 @@ export const Builder: React.FC = () => {
         config: q.data.config as any
       }))
 
-      await dbService.syncPerguntas(pesquisa.id, perguntas)
+      await dbService.syncPerguntas(fluxo.id, perguntas)
       alert('Fluxo e perguntas sincronizadas com sucesso!')
     } catch (err) {
       console.error(err)
@@ -500,13 +500,13 @@ export const Builder: React.FC = () => {
       <div className="h-16 border-b border-zinc-900 px-6 flex items-center justify-between bg-zinc-900/40 backdrop-blur-md z-10 shrink-0">
         <div className="flex items-center gap-3">
           <Link
-            to="/admin/pesquisas"
+            to="/admin/fluxos"
             className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h2 className="text-sm font-bold text-zinc-100">{pesquisa?.titulo}</h2>
+            <h2 className="text-sm font-bold text-zinc-100">{fluxo?.nome}</h2>
             <p className="text-[10px] text-zinc-500">Editor de Fluxo Condicional (Vite + React Flow)</p>
           </div>
         </div>
@@ -797,7 +797,7 @@ export const Builder: React.FC = () => {
             <form onSubmit={handleSaveSubflow} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                  Selecionar Pesquisa de Destino
+                  Selecionar Fluxo de Destino
                 </label>
                 <select
                   required
@@ -805,12 +805,12 @@ export const Builder: React.FC = () => {
                   onChange={(e) => setSelectedSubflowId(e.target.value)}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
                 >
-                  <option value="" disabled>Escolha uma pesquisa...</option>
-                  {pesquisasDisponiveis
-                    .filter((p) => p.id !== id)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.titulo}
+                  <option value="" disabled>Escolha um fluxo...</option>
+                  {fluxosDisponiveis
+                    .filter((f) => f.id !== id)
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.nome}
                       </option>
                     ))}
                 </select>

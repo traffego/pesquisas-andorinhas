@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { dbService, type Pesquisa, type Objeto, type Lider } from '../../services/db'
+import { dbService, type Pesquisa, type Objeto, type Lider, type Fluxo } from '../../services/db'
 import { 
   Plus, 
   Edit2, 
@@ -29,7 +29,8 @@ export const Pesquisas: React.FC = () => {
   const [objetoId, setObjetoId] = useState<string>('')
   const [liderId, setLiderId] = useState<string>('')
   const [publicada, setPublicada] = useState(false)
-  const [flowData, setFlowData] = useState<any>('{}')
+  const [fluxoId, setFluxoId] = useState<string>('')
+  const [fluxos, setFluxos] = useState<Fluxo[]>([])
 
   // Quick Add States
   const [isAddingObjeto, setIsAddingObjeto] = useState<'projeto' | 'evento' | null>(null)
@@ -44,14 +45,16 @@ export const Pesquisas: React.FC = () => {
   const loadAllData = async () => {
     setLoading(true)
     try {
-      const [pesqData, objData, lidData] = await Promise.all([
+      const [pesqData, objData, lidData, fluxData] = await Promise.all([
         dbService.getPesquisas(),
         dbService.getObjetos(),
-        dbService.getLideres()
+        dbService.getLideres(),
+        dbService.getFluxos()
       ])
       setPesquisas(pesqData)
       setObjetos(objData)
       setLideres(lidData)
+      setFluxos(fluxData)
     } catch (err) {
       console.error(err)
     } finally {
@@ -76,13 +79,7 @@ export const Pesquisas: React.FC = () => {
     setObjetoId(objetos[0]?.id || '')
     setLiderId('')
     setPublicada(false)
-    setFlowData({
-      nodes: [
-        { id: 'start', type: 'start', position: { x: 250, y: 150 }, data: { label: 'Início' } },
-        { id: 'end', type: 'end', position: { x: 250, y: 550 }, data: { label: 'Fim' } }
-      ],
-      edges: []
-    })
+    setFluxoId(fluxos[0]?.id || '')
     setIsModalOpen(true)
   }
 
@@ -93,7 +90,7 @@ export const Pesquisas: React.FC = () => {
     setObjetoId(p.objeto_id || '')
     setLiderId(p.lider_id || '')
     setPublicada(p.publicada)
-    setFlowData(p.flow_data)
+    setFluxoId(p.fluxo_id || '')
     setIsModalOpen(true)
   }
 
@@ -111,7 +108,7 @@ export const Pesquisas: React.FC = () => {
         publicada,
         objeto_id: objetoId || null,
         lider_id: liderId || null,
-        flow_data: typeof flowData === 'string' ? JSON.parse(flowData) : flowData
+        fluxo_id: fluxoId || null
       })
       setIsModalOpen(false)
       loadAllData()
@@ -235,9 +232,16 @@ export const Pesquisas: React.FC = () => {
                       <td className="p-4 pl-6">
                         <div>
                           <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{p.titulo}</p>
-                          <span className="text-[10px] text-muted-foreground font-medium">
-                            Objeto: {obj ? `${obj.tipo === 'projeto' ? '📁' : '📅'} ${obj.nome}` : <span className="italic text-muted-foreground/60">Sem objeto</span>}
-                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              Objeto: {obj ? `${obj.tipo === 'projeto' ? '📁' : '📅'} ${obj.nome}` : <span className="italic text-muted-foreground/60">Sem objeto</span>}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/30">|</span>
+                            <span className="text-[10px] text-primary font-bold flex items-center gap-1.5">
+                              <GitFork className="h-3 w-3" />
+                              <span>{fluxos.find(f => f.id === p.fluxo_id)?.nome || 'Sem fluxo'}</span>
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="p-4 text-muted-foreground text-sm">
@@ -279,9 +283,14 @@ export const Pesquisas: React.FC = () => {
                       </td>
                       <td className="p-4 pr-6 text-right space-x-1 whitespace-nowrap">
                         <Link
-                          to={`/admin/pesquisas/${p.id}/builder`}
-                          className="inline-flex items-center gap-1.5 p-2 rounded-lg bg-muted hover:bg-primary hover:text-primary-foreground border border-border text-muted-foreground transition-colors text-xs font-semibold cursor-pointer shadow-sm"
+                          to={p.fluxo_id ? `/admin/fluxos/${p.fluxo_id}/builder` : '#'}
+                          className={`inline-flex items-center gap-1.5 p-2 rounded-lg bg-muted border border-border text-muted-foreground text-xs font-semibold shadow-sm transition-colors ${
+                            p.fluxo_id 
+                              ? 'hover:bg-primary hover:text-primary-foreground cursor-pointer' 
+                              : 'opacity-40 cursor-not-allowed'
+                          }`}
                           title="Desenhar Fluxo"
+                          onClick={(e) => { if (!p.fluxo_id) e.preventDefault(); }}
                         >
                           <GitFork className="h-3.5 w-3.5" />
                           <span>Fluxo</span>
@@ -369,6 +378,23 @@ export const Pesquisas: React.FC = () => {
                   rows={3}
                   className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Fluxo de Perguntas
+                </label>
+                <select
+                  required
+                  value={fluxoId}
+                  onChange={(e) => setFluxoId(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                >
+                  <option value="" disabled>Selecione um fluxo...</option>
+                  {fluxos.map(f => (
+                    <option key={f.id} value={f.id}>{f.nome}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

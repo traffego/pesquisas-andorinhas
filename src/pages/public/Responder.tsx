@@ -78,7 +78,7 @@ export const Responder: React.FC = () => {
         return
       }
       setPesquisa(pesq)
-      setFlowData(pesq.flow_data)
+      setFlowData(pesq.fluxo?.flow_data)
 
       // Carrega Objeto e Líder relacionados
       let obj: Objeto | null = null
@@ -109,15 +109,20 @@ export const Responder: React.FC = () => {
       }
 
       // 3. Carrega perguntas
-      const pergs = await dbService.getPerguntas(pesq.id)
+      if (!pesq.fluxo_id) {
+        setErrorMsg('Esta pesquisa não possui um fluxo associado.')
+        setLoading(false)
+        return
+      }
+      const pergs = await dbService.getPerguntas(pesq.fluxo_id)
       setPerguntas(pergs)
 
       // 4. Inicia no nó conectado ao "Início"
-      const edges = pesq.flow_data?.edges || []
+      const edges = pesq.fluxo?.flow_data?.edges || []
       const startEdge = edges.find((e: any) => e.source === 'start')
       if (startEdge) {
         const firstNodeId = startEdge.target
-        const firstNode = pesq.flow_data?.nodes?.find((n: any) => n.id === firstNodeId)
+        const firstNode = pesq.fluxo?.flow_data?.nodes?.find((n: any) => n.id === firstNodeId)
 
         if (firstNode && firstNode.type === 'subflow') {
           const subflowId = firstNode.data?.subflowId
@@ -131,7 +136,7 @@ export const Responder: React.FC = () => {
 
           const parentState: SubflowState = {
             pesquisa: pesq,
-            flowData: pesq.flow_data,
+            flowData: pesq.fluxo?.flow_data,
             perguntas: pergs,
             respostasAcumuladas: {},
             currentNodeId: returnNodeId,
@@ -254,7 +259,7 @@ export const Responder: React.FC = () => {
   const enterSubflow = async (subflowId: string, parentState: SubflowState) => {
     setLoading(true)
     try {
-      const subq = await dbService.getPesquisaById(subflowId)
+      const subq = await dbService.getFluxoById(subflowId)
       if (!subq) {
         throw new Error('Subfluxo não encontrado ou indisponível.')
       }
@@ -280,23 +285,14 @@ export const Responder: React.FC = () => {
         const subflowEdge = subEdges.find((e: any) => e.source === firstNode.id)
         const returnNodeId = subflowEdge ? subflowEdge.target : 'end'
 
-        let obj: Objeto | null = null
-        let lid: Lider | null = null
-        if (subq.objeto_id) {
-          try { obj = await dbService.getObjetoById(subq.objeto_id) } catch (e) {}
-        }
-        if (subq.lider_id) {
-          try { lid = await dbService.getLiderById(subq.lider_id) } catch (e) {}
-        }
-
         const middleState: SubflowState = {
-          pesquisa: subq,
+          pesquisa: parentState.pesquisa,
           flowData: subq.flow_data,
           perguntas: subPergs,
           respostasAcumuladas: {},
           currentNodeId: returnNodeId,
-          objetoRelacionado: obj,
-          liderRelacionado: lid
+          objetoRelacionado: parentState.objetoRelacionado,
+          liderRelacionado: parentState.liderRelacionado
         }
 
         setSubflowStack(prev => [...prev, parentState])
@@ -304,23 +300,11 @@ export const Responder: React.FC = () => {
       } else {
         setSubflowStack(prev => [...prev, parentState])
 
-        setPesquisa(subq)
         setFlowData(subq.flow_data)
         setPerguntas(subPergs)
         setRespostasAcumuladas({})
         setValorAtual('')
         setValidacaoErro('')
-
-        if (subq.objeto_id) {
-          dbService.getObjetoById(subq.objeto_id).then(setObjetoRelacionado).catch(console.error)
-        } else {
-          setObjetoRelacionado(null)
-        }
-        if (subq.lider_id) {
-          dbService.getLiderById(subq.lider_id).then(setLiderRelacionado).catch(console.error)
-        } else {
-          setLiderRelacionado(null)
-        }
 
         setCurrentNodeId(firstNodeId)
       }
@@ -339,12 +323,6 @@ export const Responder: React.FC = () => {
   ) => {
     setLoading(true)
     try {
-      const itens = Object.keys(respostasAtuais).map(pergId => ({
-        pergunta_id: pergId,
-        valor: respostasAtuais[pergId]
-      }))
-      await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
-
       if (pilha.length > 0) {
         const parent = pilha[pilha.length - 1]
         const novaPilha = pilha.slice(0, -1)
@@ -353,22 +331,33 @@ export const Responder: React.FC = () => {
         setPesquisa(parent.pesquisa)
         setFlowData(parent.flowData)
         setPerguntas(parent.perguntas)
-        setRespostasAcumuladas(parent.respostasAcumuladas)
+        
+        const novasRespostas = {
+          ...parent.respostasAcumuladas,
+          ...respostasAtuais
+        }
+        setRespostasAcumuladas(novasRespostas)
         setObjetoRelacionado(parent.objetoRelacionado)
         setLiderRelacionado(parent.liderRelacionado)
 
         if (parent.currentNodeId === 'end') {
-          await finalizarFluxoOuSubfluxo(parent.pesquisa.id, parent.respostasAcumuladas, novaPilha)
+          await finalizarFluxoOuSubfluxo(parent.pesquisa.id, novasRespostas, novaPilha)
         } else {
           setCurrentNodeId(parent.currentNodeId)
+          setLoading(false)
         }
       } else {
+        const itens = Object.keys(respostasAtuais).map(pergId => ({
+          pergunta_id: pergId,
+          valor: respostasAtuais[pergId]
+        }))
+        await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
         setRespondeu(true)
+        setLoading(false)
       }
     } catch (err: any) {
       console.error(err)
       setErrorMsg(err.message || 'Ocorreu um erro ao gravar suas respostas. Tente novamente.')
-    } finally {
       setLoading(false)
     }
   }
