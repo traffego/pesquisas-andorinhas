@@ -209,18 +209,29 @@ export const Responder: React.FC = () => {
       // Busca arestas condicionais que saem deste nó
       const arestasSaindo = edges.filter((e: any) => e.source === currentNodeId)
       
-      // Tenta encontrar uma aresta condicional associada às opções marcadas
-      const arestaCondicionalCorrespondente = arestasSaindo.find((e: any) => 
-        e.data && e.data.opcaoId && selecionadas.includes(e.data.opcaoId)
+      // 1. Tenta encontrar uma aresta que parta do handle correspondente a uma opção selecionada (novo comportamento)
+      const arestaPorHandle = arestasSaindo.find((e: any) => 
+        e.sourceHandle && e.sourceHandle !== 'output' && selecionadas.includes(e.sourceHandle)
       )
 
-      if (arestaCondicionalCorrespondente) {
-        proximoNoId = arestaCondicionalCorrespondente.target
+      if (arestaPorHandle) {
+        proximoNoId = arestaPorHandle.target
       } else {
-        // Se nenhuma condicional bater, procura a rota incondicional padrão (sem opcaoId)
-        const arestaIncondicional = arestasSaindo.find((e: any) => !e.data || !e.data.opcaoId)
-        if (arestaIncondicional) {
-          proximoNoId = arestaIncondicional.target
+        // 2. Tenta encontrar uma aresta condicional associada às opções marcadas (comportamento antigo)
+        const arestaCondicionalCorrespondente = arestasSaindo.find((e: any) => 
+          e.data && e.data.opcaoId && selecionadas.includes(e.data.opcaoId)
+        )
+
+        if (arestaCondicionalCorrespondente) {
+          proximoNoId = arestaCondicionalCorrespondente.target
+        } else {
+          // 3. Se nenhuma condicional bater, procura a rota incondicional padrão
+          const arestaIncondicional = arestasSaindo.find((e: any) => 
+            (!e.sourceHandle || e.sourceHandle === 'output') && (!e.data || !e.data.opcaoId)
+          )
+          if (arestaIncondicional) {
+            proximoNoId = arestaIncondicional.target
+          }
         }
       }
     } else {

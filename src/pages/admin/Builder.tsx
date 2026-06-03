@@ -227,7 +227,35 @@ export const Builder: React.FC = () => {
       // Verifica se o nó de origem é uma pergunta do tipo Múltipla Escolha
       const sourceNode = nodes.find(n => n.id === connection.source)
       if (sourceNode && sourceNode.type === 'question' && sourceNode.data.tipo === 'multipla') {
-        const opcoes = (sourceNode.data.config as any)?.opcoes || []
+        const config = sourceNode.data.config as any
+        const maxRespostas = config?.max_respostas
+
+        // Se for múltipla escolha com seleção única (max === 1) e saiu de um handle específico de opção
+        if (maxRespostas === 1 && connection.sourceHandle && connection.sourceHandle !== 'output') {
+          const opcoes = config?.opcoes || []
+          const opt = opcoes.find((o: any) => o.id === connection.sourceHandle)
+
+          if (opt) {
+            // Cria a conexão condicional diretamente, pulando o modal
+            setEdges((eds) =>
+              addEdge(
+                {
+                  ...connection,
+                  type: 'custom',
+                  data: {
+                    label: opt.texto,
+                    opcaoId: opt.id
+                  },
+                  markerEnd: { type: MarkerType.ArrowClosed, color: '#d97706' }
+                },
+                eds
+              )
+            )
+            return
+          }
+        }
+
+        const opcoes = config?.opcoes || []
         if (opcoes.length > 0) {
           // Abre modal para decidir se é condicional e escolher a opção
           pendingConnectionRef.current = connection

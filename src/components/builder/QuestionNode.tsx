@@ -16,6 +16,10 @@ interface QuestionNodeProps {
     titulo: string
     tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email'
     obrigatoria: boolean
+    config?: {
+      opcoes?: { id: string; texto: string }[]
+      max_respostas?: number
+    }
     onEdit: (id: string) => void
     onDelete: (id: string) => void
   }
@@ -53,17 +57,17 @@ export const QuestionNode: React.FC<QuestionNodeProps> = ({ data }) => {
       />
 
       <div className="flex justify-between items-start gap-4">
-        <div className="space-y-1">
+        <div className="space-y-1 min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <Icon className="h-4 w-4 shrink-0" />
             <span className="text-[10px] font-bold uppercase tracking-wider">{info.label}</span>
             {data.obrigatoria && (
-              <span className="text-[9px] bg-red-950/40 border border-red-900/30 text-red-400 px-1.5 py-0.2 rounded-full font-bold">
+              <span className="text-[9px] bg-red-950/40 border border-red-900/30 text-red-400 px-1.5 py-0.2 rounded-full font-bold shrink-0">
                 Obrigatório
               </span>
             )}
           </div>
-          <h4 className="text-sm font-bold text-zinc-100 line-clamp-2 leading-snug">
+          <h4 className="text-sm font-bold text-zinc-100 line-clamp-2 leading-snug break-words">
             {data.titulo || <span className="italic text-zinc-600 font-normal">Sem título</span>}
           </h4>
         </div>
@@ -87,13 +91,49 @@ export const QuestionNode: React.FC<QuestionNodeProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* Source Handle (Saída inferior) */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="output"
-        style={{ background: '#52525b', width: 8, height: 8 }}
-      />
+      {/* Opções de Múltipla Escolha */}
+      {data.tipo === 'multipla' && (
+        <div className="mt-3 space-y-1.5 border-t border-zinc-800/80 pt-3">
+          {(data.config?.opcoes || []).map((opcao) => {
+            const isSingleChoice = data.config?.max_respostas === 1
+            return (
+              <div 
+                key={opcao.id} 
+                className="relative bg-zinc-950/40 border border-zinc-850 rounded-xl px-3 py-1.5 text-xs text-zinc-300 flex items-center justify-between group/option hover:border-zinc-700/50 transition-colors pr-6"
+              >
+                <span className="truncate pr-1">{opcao.texto}</span>
+                {isSingleChoice && (
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={opcao.id}
+                    style={{
+                      right: -6,
+                      width: 8,
+                      height: 8,
+                      background: '#d97706',
+                      border: '2px solid #18181b',
+                      borderRadius: '50%',
+                      top: '50%',
+                      transform: 'translateY(-50%)'
+                    }}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Source Handle (Saída inferior) - Não renderiza se for múltipla escolha com seleção única */}
+      {!(data.tipo === 'multipla' && data.config?.max_respostas === 1) && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="output"
+          style={{ background: '#52525b', width: 8, height: 8 }}
+        />
+      )}
     </div>
   )
 }
