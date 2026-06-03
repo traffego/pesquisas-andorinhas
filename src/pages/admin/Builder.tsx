@@ -600,6 +600,10 @@ export const Builder: React.FC = () => {
                   <option value="email">E-mail</option>
                   <option value="cpf">CPF</option>
                   <option value="cep">CEP</option>
+                  <option value="estado">Estado (UF)</option>
+                  <option value="cidade">Cidade</option>
+                  <option value="bairro">Bairro</option>
+                  <option value="logradouro">Logradouro (Rua/Av/etc.)</option>
                 </select>
               </div>
 

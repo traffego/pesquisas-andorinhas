@@ -230,9 +230,20 @@ export const Responder: React.FC = () => {
     // Texto e outros campos normais
     if (perguntaAtual.tipo !== 'multipla') {
       const txt = (valorAtual as string || '').trim()
-      if (isObrig && !txt) {
-        setValidacaoErro('Esta resposta é obrigatória.')
-        return false
+      if (isObrig) {
+        if (perguntaAtual.tipo === 'logradouro') {
+          const valStr = (valorAtual as string || '').trim()
+          const tiposLogradouro = ['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro']
+          const match = tiposLogradouro.find(t => valStr.startsWith(t + ' '))
+          const nome = match ? valStr.slice(match.length + 1).trim() : valStr.trim()
+          if (!nome) {
+            setValidacaoErro('Esta resposta é obrigatória.')
+            return false
+          }
+        } else if (!txt) {
+          setValidacaoErro('Esta resposta é obrigatória.')
+          return false
+        }
       }
 
       if (txt) {
@@ -679,7 +690,93 @@ export const Responder: React.FC = () => {
                 />
               )}
 
-              {/* 7. Múltipla Escolha */}
+              {/* 7. Estado (UF) */}
+              {perguntaAtual.tipo === 'estado' && (
+                <select
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    setValorAtual(e.target.value)
+                    setValidacaoErro('')
+                  }}
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm appearance-none"
+                >
+                  <option value="">Selecione o Estado (UF)...</option>
+                  {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map(uf => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* 8. Cidade */}
+              {perguntaAtual.tipo === 'cidade' && (
+                <input
+                  type="text"
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    setValorAtual(e.target.value)
+                    setValidacaoErro('')
+                  }}
+                  placeholder="Informe a cidade ou município..."
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                />
+              )}
+
+              {/* 9. Bairro */}
+              {perguntaAtual.tipo === 'bairro' && (
+                <input
+                  type="text"
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    setValorAtual(e.target.value)
+                    setValidacaoErro('')
+                  }}
+                  placeholder="Informe o bairro..."
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                />
+              )}
+
+              {/* 10. Logradouro com select do tipo */}
+              {perguntaAtual.tipo === 'logradouro' && (() => {
+                const parseLogradouro = (val: string) => {
+                  const tiposLogradouro = ['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro']
+                  const match = tiposLogradouro.find(t => val.startsWith(t + ' '))
+                  if (match) {
+                    return { tipo: match, nome: val.slice(match.length + 1) }
+                  }
+                  return { tipo: 'Rua', nome: val }
+                }
+                const info = parseLogradouro(valorAtual as string || '')
+                return (
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                      value={info.tipo}
+                      onChange={(e) => {
+                        const novoTipo = e.target.value
+                        setValorAtual(novoTipo + ' ' + info.nome)
+                        setValidacaoErro('')
+                      }}
+                      className="w-full sm:w-1/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                    >
+                      {['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro'].map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={info.nome}
+                      onChange={(e) => {
+                        const novoNome = e.target.value
+                        setValorAtual(info.tipo + ' ' + novoNome)
+                        setValidacaoErro('')
+                      }}
+                      placeholder="Nome do logradouro (ex: Paulista, das Flores...)"
+                      className="w-full sm:w-2/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+                    />
+                  </div>
+                )
+              })()}
+
+              {/* 11. Múltipla Escolha */}
               {perguntaAtual.tipo === 'multipla' && (
                 <div className="space-y-2.5">
                   {(perguntaAtual.config?.opcoes || []).map((opcao) => {
