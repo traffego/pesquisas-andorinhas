@@ -104,12 +104,23 @@ export const Responder: React.FC = () => {
   // --- SELEÇÃO DE MÚLTIPLA ESCOLHA ---
   const handleToggleOpcao = (opcaoId: string) => {
     const selecionadas = Array.isArray(valorAtual) ? [...valorAtual] : []
+    const maxRespostas = perguntaAtual?.config?.max_respostas
+
     if (selecionadas.includes(opcaoId)) {
       setValorAtual(selecionadas.filter(id => id !== opcaoId))
+      setValidacaoErro('')
     } else {
-      setValorAtual([...selecionadas, opcaoId])
+      if (maxRespostas === 1) {
+        // Seleção única (comportamento de Radio)
+        setValorAtual([opcaoId])
+        setValidacaoErro('')
+      } else if (maxRespostas && selecionadas.length >= maxRespostas) {
+        setValidacaoErro(`Você pode selecionar no máximo ${maxRespostas} opções.`)
+      } else {
+        setValorAtual([...selecionadas, opcaoId])
+        setValidacaoErro('')
+      }
     }
-    setValidacaoErro('')
   }
 
   // --- BUSCA PERGUNTA ATUAL ---
@@ -165,6 +176,11 @@ export const Responder: React.FC = () => {
       const selecionadas = valorAtual as string[]
       if (isObrig && selecionadas.length === 0) {
         setValidacaoErro('Por favor, selecione pelo menos uma opção.')
+        return false
+      }
+      const maxRespostas = perguntaAtual.config?.max_respostas
+      if (maxRespostas && selecionadas.length > maxRespostas) {
+        setValidacaoErro(`Por favor, selecione no máximo ${maxRespostas} opções.`)
         return false
       }
     }

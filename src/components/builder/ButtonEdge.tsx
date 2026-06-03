@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow, type EdgeProps } from '@xyflow/react'
 
 export const ButtonEdge = ({
@@ -14,6 +14,8 @@ export const ButtonEdge = ({
   data,
 }: EdgeProps) => {
   const { setEdges } = useReactFlow()
+  const [isHovered, setIsHovered] = useState(false)
+  
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -33,6 +35,16 @@ export const ButtonEdge = ({
 
   return (
     <>
+      {/* Path invisível e mais largo para capturar hover/mouse de forma estável */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={15}
+        className="cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      />
       <BaseEdge 
         path={edgePath} 
         markerEnd={markerEnd} 
@@ -49,6 +61,8 @@ export const ButtonEdge = ({
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
           }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           className="nodrag nopan flex flex-col items-center gap-1 group/edge"
         >
           {label && (
@@ -58,7 +72,12 @@ export const ButtonEdge = ({
           )}
           <button
             onClick={onEdgeClick}
-            className="w-5 h-5 bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-950 hover:bg-red-950/20 rounded-full flex items-center justify-center text-[10px] font-extrabold cursor-pointer shadow-xl transition-all duration-150 scale-90 hover:scale-110 active:scale-95"
+            style={{
+              opacity: isHovered ? 1 : 0,
+              pointerEvents: isHovered ? 'all' : 'none',
+              transition: 'opacity 150ms ease-in-out, transform 150ms ease-in-out'
+            }}
+            className="w-5 h-5 bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-950 hover:bg-red-950/20 rounded-full flex items-center justify-center text-[10px] font-extrabold cursor-pointer shadow-xl scale-90 hover:scale-110 active:scale-95"
             title="Deletar Conexão"
           >
             ×

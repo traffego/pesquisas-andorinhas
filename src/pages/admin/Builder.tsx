@@ -60,6 +60,7 @@ export const Builder: React.FC = () => {
   const [qObrigatoria, setQObrigatoria] = useState(true)
   const [qOpcoes, setQOpcoes] = useState<{ id: string; texto: string }[]>([])
   const [newOpcaoTexto, setNewOpcaoTexto] = useState('')
+  const [qMaxRespostas, setQMaxRespostas] = useState<string>('1')
 
   // Estados do formulário de Aresta Condicional
   const pendingConnectionRef = useRef<Connection | null>(null)
@@ -117,6 +118,7 @@ export const Builder: React.FC = () => {
     setQObrigatoria(true)
     setQOpcoes([])
     setNewOpcaoTexto('')
+    setQMaxRespostas('1')
     setIsQuestionModalOpen(true)
   }
 
@@ -130,6 +132,8 @@ export const Builder: React.FC = () => {
         setQObrigatoria(node.data.obrigatoria as boolean)
         setQOpcoes((node.data.config as any)?.opcoes || [])
         setNewOpcaoTexto('')
+        const maxR = (node.data.config as any)?.max_respostas
+        setQMaxRespostas(maxR ? String(maxR) : 'livre')
         setIsQuestionModalOpen(true)
       }
       return nds
@@ -156,6 +160,9 @@ export const Builder: React.FC = () => {
     e.preventDefault()
     if (!qTitulo.trim()) return
 
+    const configOpcoes = qTipo === 'multipla' ? qOpcoes : undefined
+    const maxRespostasVal = qTipo === 'multipla' && qMaxRespostas !== 'livre' ? Number(qMaxRespostas) : undefined
+
     if (editingQuestionId) {
       // Editar nó existente
       setNodes((nds) =>
@@ -168,7 +175,11 @@ export const Builder: React.FC = () => {
                 titulo: qTitulo,
                 tipo: qTipo,
                 obrigatoria: qObrigatoria,
-                config: { opcoes: qTipo === 'multipla' ? qOpcoes : undefined }
+                config: { 
+                  opcoes: configOpcoes,
+                  min_respostas: qTipo === 'multipla' ? 1 : undefined,
+                  max_respostas: maxRespostasVal
+                }
               }
             }
           }
@@ -187,7 +198,11 @@ export const Builder: React.FC = () => {
           titulo: qTitulo,
           tipo: qTipo,
           obrigatoria: qObrigatoria,
-          config: { opcoes: qTipo === 'multipla' ? qOpcoes : undefined },
+          config: { 
+            opcoes: configOpcoes,
+            min_respostas: qTipo === 'multipla' ? 1 : undefined,
+            max_respostas: maxRespostasVal
+          },
           onEdit: handleOpenEditQuestion,
           onDelete: handleDeleteQuestionNode
         }
@@ -443,10 +458,10 @@ export const Builder: React.FC = () => {
                   onChange={(e) => setQTipo(e.target.value as Pergunta['tipo'])}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
                 >
-                  <option value="texto_curto">Texto Curto (Uma Linha)</option>
-                  <option value="textarea">Texto Longo (Textarea)</option>
+                  <option value="texto_curto">Texto Curto</option>
+                  <option value="textarea">Texto Longo</option>
                   <option value="multipla">Múltipla Escolha</option>
-                  <option value="whatsapp">WhatsApp / Celular</option>
+                  <option value="whatsapp">WhatsApp</option>
                   <option value="email">E-mail</option>
                 </select>
               </div>
@@ -465,18 +480,41 @@ export const Builder: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center gap-3 bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl">
-                <input
-                  type="checkbox"
-                  id="obrigatoria"
-                  checked={qObrigatoria}
-                  onChange={(e) => setQObrigatoria(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-800 text-primary bg-zinc-950 focus:ring-primary"
-                />
-                <label htmlFor="obrigatoria" className="text-sm font-semibold text-zinc-300 select-none cursor-pointer">
-                  Resposta obrigatória?
-                </label>
+              <div className="flex items-center justify-between bg-zinc-950/40 border border-zinc-800 p-4 rounded-xl">
+                <span className="text-sm font-bold text-zinc-300">Obrigatório</span>
+                <button
+                  type="button"
+                  onClick={() => setQObrigatoria(!qObrigatoria)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    qObrigatoria ? 'bg-primary' : 'bg-zinc-800'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      qObrigatoria ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
+
+              {qTipo === 'multipla' && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                    Quantidade de respostas
+                  </label>
+                  <select
+                    value={qMaxRespostas}
+                    onChange={(e) => setQMaxRespostas(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                  >
+                    <option value="1">só 1</option>
+                    <option value="2">até 2</option>
+                    <option value="3">até 3</option>
+                    <option value="5">até 5</option>
+                    <option value="livre">livre</option>
+                  </select>
+                </div>
+              )}
 
               {/* OPÇÕES DA MÚLTIPLA ESCOLHA */}
               {qTipo === 'multipla' && (
