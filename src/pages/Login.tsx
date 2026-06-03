@@ -27,7 +27,7 @@ export const Login: React.FC = () => {
       if (error) throw error
       navigate('/admin/dashboard')
     } catch (err: any) {
-      setErrorMsg('E-mail ou senha inválidos.')
+      setErrorMsg(err.message || 'E-mail ou senha inválidos.')
     } finally {
       setLoading(false)
     }
