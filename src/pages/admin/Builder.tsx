@@ -1,0 +1,610 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { 
+  ReactFlow, 
+  Background, 
+  Controls, 
+  useNodesState, 
+  useEdgesState, 
+  addEdge, 
+  type Connection, 
+  type Edge, 
+  type Node, 
+  Panel,
+  MarkerType
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+
+import { dbService, type Pesquisa, type Pergunta } from '../../services/db'
+import { StartNode } from '../../components/builder/StartNode'
+import { EndNode } from '../../components/builder/EndNode'
+import { QuestionNode } from '../../components/builder/QuestionNode'
+import { ButtonEdge } from '../../components/builder/ButtonEdge'
+import { 
+  ArrowLeft, 
+  Save, 
+  Plus, 
+  X, 
+  PlusCircle, 
+  Trash2, 
+  Sparkles
+} from 'lucide-react'
+
+const nodeTypes = {
+  start: StartNode,
+  end: EndNode,
+  question: QuestionNode
+}
+
+const edgeTypes = {
+  custom: ButtonEdge
+}
+
+export const Builder: React.FC = () => {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
+  const [pesquisa, setPesquisa] = useState<Pesquisa | null>(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [loading, setLoading] = useState(true)
+
+  // Modais
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
+  const [isEdgeModalOpen, setIsEdgeModalOpen] = useState(false)
+
+  // Estados do formulário de Pergunta
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+  const [qTitulo, setQTitulo] = useState('')
+  const [qTipo, setQTipo] = useState<Pergunta['tipo']>('texto_curto')
+  const [qObrigatoria, setQObrigatoria] = useState(true)
+  const [qOpcoes, setQOpcoes] = useState<{ id: string; texto: string }[]>([])
+  const [newOpcaoTexto, setNewOpcaoTexto] = useState('')
+
+  // Estados do formulário de Aresta Condicional
+  const pendingConnectionRef = useRef<Connection | null>(null)
+  const [edgeSourceQuestion, setEdgeSourceQuestion] = useState<any | null>(null)
+
+  useEffect(() => {
+    if (id) {
+      loadPesquisa(id)
+    }
+  }, [id])
+
+  const loadPesquisa = async (pesquisaId: string) => {
+    setLoading(true)
+    try {
+      const pesq = await dbService.getPesquisaById(pesquisaId)
+      if (!pesq) {
+        navigate('/admin/pesquisas')
+        return
+      }
+      setPesquisa(pesq)
+
+      // Carregar nós e arestas do flow_data
+      const flow = pesq.flow_data || {}
+      
+      // Mapear callbacks do questionNode nos nós
+      const initialNodes = (flow.nodes || []).map((n: Node) => {
+        if (n.type === 'question') {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              onEdit: handleOpenEditQuestion,
+              onDelete: handleDeleteQuestionNode
+            }
+          }
+        }
+        return n
+      })
+
+      setNodes(initialNodes)
+      setEdges(flow.edges || [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // --- LOGICA DE PERGUNTAS (NÓS) ---
+
+  const handleOpenAddQuestion = () => {
+    setEditingQuestionId(null)
+    setQTitulo('')
+    setQTipo('texto_curto')
+    setQObrigatoria(true)
+    setQOpcoes([])
+    setNewOpcaoTexto('')
+    setIsQuestionModalOpen(true)
+  }
+
+  const handleOpenEditQuestion = useCallback((nodeId: string) => {
+    setNodes((nds) => {
+      const node = nds.find(n => n.id === nodeId)
+      if (node) {
+        setEditingQuestionId(nodeId)
+        setQTitulo(node.data.titulo as string)
+        setQTipo(node.data.tipo as Pergunta['tipo'])
+        setQObrigatoria(node.data.obrigatoria as boolean)
+        setQOpcoes((node.data.config as any)?.opcoes || [])
+        setNewOpcaoTexto('')
+        setIsQuestionModalOpen(true)
+      }
+      return nds
+    })
+  }, [setNodes])
+
+  const handleDeleteQuestionNode = useCallback((nodeId: string) => {
+    if (!confirm('Deseja excluir esta pergunta do fluxo? Conexões ligadas a ela serão perdidas.')) return
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId))
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+  }, [setNodes, setEdges])
+
+  const handleAddOpcao = () => {
+    if (!newOpcaoTexto.trim()) return
+    setQOpcoes([...qOpcoes, { id: crypto.randomUUID(), texto: newOpcaoTexto.trim() }])
+    setNewOpcaoTexto('')
+  }
+
+  const handleRemoveOpcao = (opcaoId: string) => {
+    setQOpcoes(qOpcoes.filter(o => o.id !== opcaoId))
+  }
+
+  const handleSaveQuestion = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!qTitulo.trim()) return
+
+    if (editingQuestionId) {
+      // Editar nó existente
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === editingQuestionId) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                titulo: qTitulo,
+                tipo: qTipo,
+                obrigatoria: qObrigatoria,
+                config: { opcoes: qTipo === 'multipla' ? qOpcoes : undefined }
+              }
+            }
+          }
+          return n
+        })
+      )
+    } else {
+      // Adicionar novo nó de pergunta no centro aproximado
+      const newId = crypto.randomUUID()
+      const newNode: Node = {
+        id: newId,
+        type: 'question',
+        position: { x: 250, y: 350 },
+        data: {
+          id: newId,
+          titulo: qTitulo,
+          tipo: qTipo,
+          obrigatoria: qObrigatoria,
+          config: { opcoes: qTipo === 'multipla' ? qOpcoes : undefined },
+          onEdit: handleOpenEditQuestion,
+          onDelete: handleDeleteQuestionNode
+        }
+      }
+      setNodes((nds) => [...nds, newNode])
+    }
+
+    setIsQuestionModalOpen(false)
+  }
+
+  // --- LÓGICA DE CONEXÃO (ARESTAS) ---
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      // Validação: Impedir início direto no fim se existirem perguntas
+      const hasQuestions = nodes.some(n => n.type === 'question')
+      if (connection.source === 'start' && connection.target === 'end' && hasQuestions) {
+        alert('Fluxo Inválido! Não ligue o "Início" diretamente no "Fim" se houver perguntas no fluxo.')
+        return
+      }
+
+      // Verifica se o nó de origem é uma pergunta do tipo Múltipla Escolha
+      const sourceNode = nodes.find(n => n.id === connection.source)
+      if (sourceNode && sourceNode.type === 'question' && sourceNode.data.tipo === 'multipla') {
+        const opcoes = (sourceNode.data.config as any)?.opcoes || []
+        if (opcoes.length > 0) {
+          // Abre modal para decidir se é condicional e escolher a opção
+          pendingConnectionRef.current = connection
+          setEdgeSourceQuestion({
+            titulo: sourceNode.data.titulo,
+            opcoes
+          })
+          setIsEdgeModalOpen(true)
+          return
+        }
+      }
+
+      // Conexão direta padrão
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            type: 'custom',
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#52525b' }
+          },
+          eds
+        )
+      )
+    },
+    [nodes, setEdges]
+  )
+
+  const handleSaveEdgeCondition = (opcaoId: string | 'incondicional') => {
+    const connection = pendingConnectionRef.current
+    if (!connection) return
+
+    let edgeData = {}
+    if (opcaoId !== 'incondicional' && edgeSourceQuestion) {
+      const opt = edgeSourceQuestion.opcoes.find((o: any) => o.id === opcaoId)
+      if (opt) {
+        edgeData = {
+          label: opt.texto,
+          opcaoId: opt.id
+        }
+      }
+    }
+
+    setEdges((eds) =>
+      addEdge(
+        {
+          ...connection,
+          type: 'custom',
+          data: edgeData,
+          markerEnd: { 
+            type: MarkerType.ArrowClosed, 
+            color: opcaoId === 'incondicional' ? '#52525b' : '#d97706' 
+          }
+        },
+        eds
+      )
+    )
+
+    setIsEdgeModalOpen(false)
+    pendingConnectionRef.current = null
+    setEdgeSourceQuestion(null)
+  }
+
+  // --- SALVAR FLUXO ---
+
+  const handleSaveFlow = async () => {
+    if (!pesquisa) return
+
+    // Validações antes de salvar
+    // 1. Início conectado a alguma coisa
+    const isStartConnected = edges.some(e => e.source === 'start')
+    if (!isStartConnected) {
+      alert('Aviso: O nó "Início" não está conectado. Conecte-o a uma pergunta para que a pesquisa possa começar.')
+      return
+    }
+
+    // 2. Fim conectado a alguma coisa
+    const isEndConnected = edges.some(e => e.target === 'end')
+    if (!isEndConnected) {
+      alert('Aviso: O nó "Fim" não está conectado. Conecte o final das perguntas a ele.')
+      return
+    }
+
+    try {
+      // 1. Estrutura flow_data
+      const flowData = {
+        nodes: nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          position: n.position,
+          data: {
+            id: n.data.id,
+            titulo: n.data.titulo,
+            tipo: n.data.tipo,
+            obrigatoria: n.data.obrigatoria,
+            config: n.data.config
+          }
+        })),
+        edges
+      }
+
+      // 2. Mapeia e atualiza a tabela pesquisa
+      await dbService.savePesquisa({
+        ...pesquisa,
+        flow_data: flowData
+      })
+
+      // 3. Sincroniza tabela de perguntas
+      const questionNodes = nodes.filter(n => n.type === 'question')
+      
+      // Precisamos dar uma ordem sequencial aproximada baseada na posição Y do nó no grafo
+      const sortedQuestions = [...questionNodes].sort((a, b) => a.position.y - b.position.y)
+
+      const perguntas: Omit<Pergunta, 'created_at'>[] = sortedQuestions.map((q, idx) => ({
+        id: q.id,
+        pesquisa_id: pesquisa.id,
+        tipo: q.data.tipo as Pergunta['tipo'],
+        titulo: q.data.titulo as string,
+        obrigatoria: q.data.obrigatoria as boolean,
+        ordem: idx + 1,
+        config: q.data.config as any
+      }))
+
+      await dbService.syncPerguntas(pesquisa.id, perguntas)
+      alert('Fluxo e perguntas sincronizadas com sucesso!')
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao salvar o fluxo de perguntas.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-zinc-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-[calc(100vh-4rem)] flex flex-col -m-8 relative bg-zinc-950">
+      {/* Top Header */}
+      <div className="h-16 border-b border-zinc-900 px-6 flex items-center justify-between bg-zinc-900/40 backdrop-blur-md z-10 shrink-0">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/admin/pesquisas"
+            className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h2 className="text-sm font-bold text-zinc-100">{pesquisa?.titulo}</h2>
+            <p className="text-[10px] text-zinc-500">Editor de Fluxo Condicional (Vite + React Flow)</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleOpenAddQuestion}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar Pergunta
+          </button>
+          <button
+            onClick={handleSaveFlow}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-md shadow-primary/20 hover:bg-primary-hover active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Save className="h-4 w-4" />
+            Salvar Fluxo
+          </button>
+        </div>
+      </div>
+
+      {/* Editor React Flow */}
+      <div className="flex-1 min-h-0 relative">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          colorMode="dark"
+        >
+          <Background color="#27272a" gap={16} size={1} />
+          <Controls showInteractive={false} />
+          
+          <Panel position="top-left" className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 max-w-[280px] shadow-2xl backdrop-blur-sm space-y-2">
+            <div className="flex gap-1.5 items-center text-[10px] font-bold text-violet-400 uppercase tracking-wider">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Instruções Rápidas</span>
+            </div>
+            <ul className="text-[10px] text-zinc-400 space-y-1 pl-1 list-disc list-inside leading-relaxed">
+              <li>Arraste bolinhas para conectar perguntas.</li>
+              <li>Múltipla escolha abre modal de regras.</li>
+              <li>Aresta laranja indica lógica condicional.</li>
+              <li>Passe o mouse na linha e clique no (X) para remover conexão.</li>
+            </ul>
+          </Panel>
+        </ReactFlow>
+      </div>
+
+      {/* MODAL 1: ADICIONAR / EDITAR PERGUNTA */}
+      {isQuestionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-5">
+              <h3 className="text-lg font-bold text-zinc-100">
+                {editingQuestionId ? 'Editar Pergunta' : 'Criar Nova Pergunta'}
+              </h3>
+              <button
+                onClick={() => setIsQuestionModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuestion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  Tipo de Pergunta
+                </label>
+                <select
+                  value={qTipo}
+                  onChange={(e) => setQTipo(e.target.value as Pergunta['tipo'])}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                >
+                  <option value="texto_curto">Texto Curto (Uma Linha)</option>
+                  <option value="textarea">Texto Longo (Textarea)</option>
+                  <option value="multipla">Múltipla Escolha</option>
+                  <option value="whatsapp">WhatsApp / Celular</option>
+                  <option value="email">E-mail</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  Título da Pergunta / Enunciado
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={qTitulo}
+                  onChange={(e) => setQTitulo(e.target.value)}
+                  placeholder="Ex: Qual o seu nível de satisfação?"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none transition-colors text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="obrigatoria"
+                  checked={qObrigatoria}
+                  onChange={(e) => setQObrigatoria(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-800 text-primary bg-zinc-950 focus:ring-primary"
+                />
+                <label htmlFor="obrigatoria" className="text-sm font-semibold text-zinc-300 select-none cursor-pointer">
+                  Resposta obrigatória?
+                </label>
+              </div>
+
+              {/* OPÇÕES DA MÚLTIPLA ESCOLHA */}
+              {qTipo === 'multipla' && (
+                <div className="space-y-3 border-t border-zinc-800 pt-4">
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Opções de Escolha
+                  </label>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newOpcaoTexto}
+                      onChange={(e) => setNewOpcaoTexto(e.target.value)}
+                      placeholder="Adicione uma opção..."
+                      className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddOpcao()
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddOpcao}
+                      className="p-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl transition-all cursor-pointer"
+                    >
+                      <PlusCircle className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  {qOpcoes.length === 0 ? (
+                    <p className="text-xs text-zinc-650 italic">Adicione opções para poder definir o fluxo condicional.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                      {qOpcoes.map((op) => (
+                        <div key={op.id} className="flex justify-between items-center bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-850">
+                          <span className="text-sm text-zinc-300">{op.texto}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOpcao(op.id)}
+                            className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/20 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsQuestionModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-hover rounded-xl shadow-lg shadow-primary/20 transition-all"
+                >
+                  {editingQuestionId ? 'Salvar Alterações' : 'Criar Pergunta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: DEFINIR REGRA CONDICIONAL DE CONEXÃO */}
+      {isEdgeModalOpen && edgeSourceQuestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up">
+            <div className="flex gap-2 items-center text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">
+              <Sparkles className="h-4 w-4" />
+              <span>Conexão Condicional</span>
+            </div>
+            
+            <h3 className="text-base font-bold text-zinc-100 mb-1">
+              Origem: Múltipla Escolha
+            </h3>
+            <p className="text-xs text-zinc-450 mb-5 leading-relaxed">
+              Você puxou uma conexão de <strong>{edgeSourceQuestion.titulo}</strong>. Selecione se esta rota é condicional:
+            </p>
+
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              {/* Opção Incondicional */}
+              <button
+                onClick={() => handleSaveEdgeCondition('incondicional')}
+                className="w-full text-left p-3.5 rounded-xl border border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/60 transition-all flex flex-col justify-start gap-0.5 cursor-pointer"
+              >
+                <span className="text-sm font-bold text-zinc-200">Rota Padrão (Incondicional)</span>
+                <span className="text-[10px] text-zinc-500">Segue sempre, caso nenhuma outra condicional seja correspondida.</span>
+              </button>
+
+              {/* Lista de Opções Condicionais */}
+              <div className="border-t border-zinc-800 my-2 pt-2">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 pl-1">Filtrar por opção</p>
+                {edgeSourceQuestion.opcoes.map((op: any) => (
+                  <button
+                    key={op.id}
+                    onClick={() => handleSaveEdgeCondition(op.id)}
+                    className="w-full text-left p-3 rounded-xl border border-amber-900/20 hover:border-amber-700/60 bg-amber-950/10 hover:bg-amber-950/20 transition-all flex items-center justify-between gap-3 cursor-pointer mb-2 last:mb-0"
+                  >
+                    <div>
+                      <span className="text-xs font-bold text-amber-300">Somente se responder:</span>
+                      <p className="text-sm text-zinc-200 font-semibold mt-0.5">{op.texto}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-zinc-800 pt-4 mt-6">
+              <button
+                type="button"
+                onClick={() => setIsEdgeModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 rounded-xl transition-all"
+              >
+                Cancelar Conexão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
