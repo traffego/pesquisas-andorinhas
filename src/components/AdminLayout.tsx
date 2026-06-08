@@ -9,7 +9,6 @@ import {
   Users2, 
   ClipboardList, 
   LogOut,
-  DatabaseZap,
   Sun,
   Moon,
   GitFork
@@ -69,11 +68,6 @@ export const AdminLayout: React.FC = () => {
 
         {/* User Info */}
         <div className="p-4 border-t border-border space-y-3">
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-            <DatabaseZap className="h-4 w-4" />
-            <span className="font-medium">Supabase Conectado</span>
-          </div>
-
           <div className="flex items-center justify-between gap-3 px-2">
             <div className="overflow-hidden">
               <p className="text-sm font-semibold text-foreground truncate">
