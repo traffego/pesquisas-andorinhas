@@ -67,7 +67,7 @@ export const Dashboard: React.FC = () => {
             Olá, seja bem-vindo ao Andorinha
           </h1>
           <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-            Crie fluxos de perguntas dinâmicos, conecte múltiplos ramais e filtre respostas em tempo real. Tudo isso desenhando de forma visual com React Flow.
+            Crie fluxos de perguntas dinâmicos, conecte múltiplos ramais e filtre respostas em tempo real. Tudo isso desenhado de forma visual e interativa com nosso construtor inteligente de fluxos.
           </p>
           <div className="flex gap-4">
             <Link

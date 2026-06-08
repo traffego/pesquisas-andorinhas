@@ -507,7 +507,7 @@ export const Builder: React.FC = () => {
           </Link>
           <div>
             <h2 className="text-sm font-bold text-zinc-100">{fluxo?.nome}</h2>
-            <p className="text-[10px] text-zinc-500">Editor de Fluxo Condicional (Vite + React Flow)</p>
+            <p className="text-[10px] text-zinc-500">Editor de Fluxo Condicional Inteligente</p>
           </div>
         </div>
 
