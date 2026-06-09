@@ -22,6 +22,18 @@ export const Responder: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('')
   const [respondeu, setRespondeu] = useState(false)
   const [deviceFp, setDeviceFp] = useState('')
+  const [todasPerguntasSession, setTodasPerguntasSession] = useState<Pergunta[]>([])
+
+  // Acumula todas as perguntas carregadas na sessão para o preview de subfluxos
+  useEffect(() => {
+    if (perguntas.length > 0) {
+      setTodasPerguntasSession(prev => {
+        const map = new Map(prev.map(p => [p.id, p]))
+        perguntas.forEach(p => map.set(p.id, p))
+        return Array.from(map.values())
+      })
+    }
+  }, [perguntas])
 
   // Estado do fluxo de respostas
   const [currentNodeId, setCurrentNodeId] = useState<string>('start')
@@ -579,6 +591,7 @@ export const Responder: React.FC = () => {
       setValorAtual('')
       setValidacaoErro('')
       setSubflowStack([])
+      setTodasPerguntasSession([])
       setCurrentNodeId('start')
       const fp = getDeviceFingerprint()
       loadFlow(token!, fp)
@@ -600,12 +613,20 @@ export const Responder: React.FC = () => {
                 </p>
                 <div className="text-left bg-muted/60 p-4 rounded-2xl space-y-3 max-h-52 overflow-y-auto border border-border">
                   {Object.entries(respostasAcumuladas).map(([pergId, valor]) => {
-                    const perg = perguntas.find(p => p.id === pergId)
+                    const perg = todasPerguntasSession.find(p => p.id === pergId)
+                    let displayValor = ''
+                    if (perg && perg.tipo === 'multipla' && perg.config?.opcoes) {
+                      const ids = Array.isArray(valor) ? valor : [valor]
+                      const textos = ids.map(id => perg.config.opcoes?.find(o => o.id === id)?.texto || id)
+                      displayValor = textos.join(', ')
+                    } else {
+                      displayValor = Array.isArray(valor) ? valor.join(', ') : String(valor)
+                    }
                     return (
                       <div key={pergId} className="text-xs space-y-1 border-b border-border/50 pb-2 last:border-b-0 last:pb-0">
                         <div className="font-bold text-foreground">{perg?.titulo || pergId}:</div>
                         <div className="text-muted-foreground bg-card p-2 rounded-lg border border-border/30 break-words font-mono">
-                          {Array.isArray(valor) ? valor.join(', ') : String(valor)}
+                          {displayValor}
                         </div>
                       </div>
                     )
