@@ -698,7 +698,13 @@ export const Responder: React.FC = () => {
       {/* Pergunta Container */}
       <main className="flex-1 flex items-center justify-center p-6 max-w-md mx-auto w-full">
         {perguntaAtual && (
-          <div className="w-full space-y-8 animate-slide-in">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleAvancar()
+            }}
+            className="w-full space-y-8 animate-slide-in"
+          >
             {/* Título pergunta */}
             <div className="space-y-3">
               <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
@@ -734,6 +740,12 @@ export const Responder: React.FC = () => {
                   onChange={(e) => {
                     setValorAtual(e.target.value)
                     setValidacaoErro('')
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleAvancar()
+                    }
                   }}
                   placeholder="Escreva sua resposta com detalhes..."
                   rows={5}
@@ -957,6 +969,7 @@ export const Responder: React.FC = () => {
                     return (
                       <button
                         key={opcao.id}
+                        type="button"
                         onClick={() => handleToggleOpcao(opcao.id)}
                         className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
                           isSelected
@@ -986,13 +999,13 @@ export const Responder: React.FC = () => {
 
             {/* Ação de avançar */}
             <button
-              onClick={handleAvancar}
+              type="submit"
               className="w-full rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer text-base"
             >
               <span>Avançar</span>
               <ChevronRight className="h-5 w-5" />
             </button>
-          </div>
+          </form>
         )}
       </main>
 
