@@ -55,6 +55,7 @@ export const Builder: React.FC = () => {
   // Modais
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
   const [isEdgeModalOpen, setIsEdgeModalOpen] = useState(false)
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
 
   // Estados do formulário de Pergunta
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
@@ -510,7 +511,7 @@ export const Builder: React.FC = () => {
   const handlePreview = async () => {
     const saved = await handleSaveFlow()
     if (saved) {
-      window.open(`/r/preview?fluxo=${id}`, '_blank')
+      setIsPreviewModalOpen(true)
     }
   }
 
@@ -885,6 +886,39 @@ export const Builder: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: VISUALIZAÇÃO PREVIEW (IFRAME) */}
+      {isPreviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-md h-[85vh] bg-zinc-950 rounded-3xl border border-zinc-800 flex flex-col shadow-2xl overflow-hidden relative animate-scale-up">
+            {/* Header */}
+            <div className="flex justify-between items-center bg-zinc-900 border-b border-zinc-800 px-5 py-4 shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Preview do Fluxo
+                </h3>
+                <p className="text-[10px] text-zinc-400">Simulador de respostas interativo</p>
+              </div>
+              <button
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-zinc-250 transition-all cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Iframe Body */}
+            <div className="flex-1 min-h-0 bg-background relative">
+              <iframe
+                src={`/r/preview?fluxo=${id}`}
+                title="Visualização Prévia"
+                className="w-full h-full border-none"
+              />
+            </div>
           </div>
         </div>
       )}
