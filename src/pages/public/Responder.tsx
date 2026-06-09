@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import { dbService, type Pesquisa, type Pergunta, type Objeto, type Lider } from '../../services/db'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { dbService, type Pesquisa, type Pergunta, type Objeto, type Lider, type Fluxo } from '../../services/db'
 import logoImg from '../../assets/logo.png'
 import { 
   CheckCircle2, 
@@ -12,7 +12,9 @@ import {
 export const Responder: React.FC = () => {
   const { token } = useParams<{ token: string }>()
 
-  const [pesquisa, setPesquisa] = useState<Pesquisa | null>(null)
+  const [searchParams] = useSearchParams()
+
+  const [pesquisa, setPesquisa] = useState<(Pesquisa & { fluxo?: Fluxo }) | null>(null)
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [flowData, setFlowData] = useState<any>(null)
   
@@ -34,7 +36,7 @@ export const Responder: React.FC = () => {
   const [liderRelacionado, setLiderRelacionado] = useState<Lider | null>(null)
 
   interface SubflowState {
-    pesquisa: Pesquisa
+    pesquisa: Pesquisa & { fluxo?: Fluxo }
     flowData: any
     perguntas: Pergunta[]
     respostasAcumuladas: Record<string, any>
@@ -65,64 +67,99 @@ export const Responder: React.FC = () => {
       setDeviceFp(fp)
       loadFlow(token, fp)
     }
-  }, [token])
+  }, [token, searchParams])
 
   const loadFlow = async (tk: string, fp: string) => {
     setLoading(true)
     try {
-      // 1. Carrega pesquisa pública ativa
-      const pesq = await dbService.getPesquisaByToken(tk)
-      if (!pesq) {
-        setErrorMsg('Pesquisa não encontrada ou indisponível.')
-        setLoading(false)
-        return
-      }
-      setPesquisa(pesq)
-      setFlowData(pesq.fluxo?.flow_data)
-
-      // Carrega Objeto e Líder relacionados
+      let pesq: Pesquisa | null = null
       let obj: Objeto | null = null
       let lid: Lider | null = null
-      if (pesq.objeto_id) {
-        try {
-          obj = await dbService.getObjetoById(pesq.objeto_id)
-          setObjetoRelacionado(obj)
-        } catch (e) {
-          console.error(e)
+      let pergs: Pergunta[] = []
+      let flowDataObj: any = null
+
+      if (tk === 'preview') {
+        const fluxoId = searchParams.get('fluxo')
+        if (!fluxoId) {
+          setErrorMsg('ID do fluxo não especificado para visualização.')
+          setLoading(false)
+          return
         }
-      }
-      if (pesq.lider_id) {
-        try {
-          lid = await dbService.getLiderById(pesq.lider_id)
-          setLiderRelacionado(lid)
-        } catch (e) {
-          console.error(e)
+        const fluxoObj = await dbService.getFluxoById(fluxoId)
+        if (!fluxoObj) {
+          setErrorMsg('Fluxo de visualização não encontrado.')
+          setLoading(false)
+          return
         }
+        pesq = {
+          id: 'preview',
+          titulo: fluxoObj.nome || 'Visualização do Fluxo',
+          descricao: '',
+          token: 'preview',
+          publicada: true,
+          fluxo_id: fluxoObj.id,
+          created_at: new Date().toISOString(),
+          objeto_id: null,
+          lider_id: null
+        }
+        flowDataObj = fluxoObj.flow_data
+        pergs = await dbService.getPerguntas(fluxoObj.id)
+      } else {
+        // 1. Carrega pesquisa pública ativa
+        const realPesq = await dbService.getPesquisaByToken(tk)
+        if (!realPesq) {
+          setErrorMsg('Pesquisa não encontrada ou indisponível.')
+          setLoading(false)
+          return
+        }
+        pesq = realPesq
+        flowDataObj = realPesq.fluxo?.flow_data
+
+        // Carrega Objeto e Líder relacionados
+        if (realPesq.objeto_id) {
+          try {
+            obj = await dbService.getObjetoById(realPesq.objeto_id)
+            setObjetoRelacionado(obj)
+          } catch (e) {
+            console.error(e)
+          }
+        }
+        if (realPesq.lider_id) {
+          try {
+            lid = await dbService.getLiderById(realPesq.lider_id)
+            setLiderRelacionado(lid)
+          } catch (e) {
+            console.error(e)
+          }
+        }
+
+        // 2. Prevenção de duplicados
+        const jaRespondeu = await dbService.hasDeviceResponded(realPesq.id, fp)
+        if (jaRespondeu) {
+          setRespondeu(true)
+          setLoading(false)
+          return
+        }
+
+        // 3. Carrega perguntas
+        if (!realPesq.fluxo_id) {
+          setErrorMsg('Esta pesquisa não possui um fluxo associado.')
+          setLoading(false)
+          return
+        }
+        pergs = await dbService.getPerguntas(realPesq.fluxo_id)
       }
 
-      // 2. Prevenção de duplicados
-      const jaRespondeu = await dbService.hasDeviceResponded(pesq.id, fp)
-      if (jaRespondeu) {
-        setRespondeu(true)
-        setLoading(false)
-        return
-      }
-
-      // 3. Carrega perguntas
-      if (!pesq.fluxo_id) {
-        setErrorMsg('Esta pesquisa não possui um fluxo associado.')
-        setLoading(false)
-        return
-      }
-      const pergs = await dbService.getPerguntas(pesq.fluxo_id)
+      setPesquisa(pesq)
+      setFlowData(flowDataObj)
       setPerguntas(pergs)
 
       // 4. Inicia no nó conectado ao "Início"
-      const edges = pesq.fluxo?.flow_data?.edges || []
+      const edges = flowDataObj?.edges || []
       const startEdge = edges.find((e: any) => e.source === 'start')
       if (startEdge) {
         const firstNodeId = startEdge.target
-        const firstNode = pesq.fluxo?.flow_data?.nodes?.find((n: any) => n.id === firstNodeId)
+        const firstNode = flowDataObj?.nodes?.find((n: any) => n.id === firstNodeId)
 
         if (firstNode && firstNode.type === 'subflow') {
           const subflowId = firstNode.data?.subflowId
@@ -135,8 +172,8 @@ export const Responder: React.FC = () => {
           const returnNodeId = subflowEdge ? subflowEdge.target : 'end'
 
           const parentState: SubflowState = {
-            pesquisa: pesq,
-            flowData: pesq.fluxo?.flow_data,
+            pesquisa: pesq!,
+            flowData: flowDataObj,
             perguntas: pergs,
             respostasAcumuladas: {},
             currentNodeId: returnNodeId,
@@ -402,11 +439,13 @@ export const Responder: React.FC = () => {
           setLoading(false)
         }
       } else {
-        const itens = Object.keys(respostasAtuais).map(pergId => ({
-          pergunta_id: pergId,
-          valor: respostasAtuais[pergId]
-        }))
-        await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
+        if (token !== 'preview') {
+          const itens = Object.keys(respostasAtuais).map(pergId => ({
+            pergunta_id: pergId,
+            valor: respostasAtuais[pergId]
+          }))
+          await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
+        }
         setRespondeu(true)
         setLoading(false)
       }
@@ -536,16 +575,40 @@ export const Responder: React.FC = () => {
   if (respondeu) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
-        <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl relative overflow-hidden">
+        <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 -translate-y-10 translate-x-10 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl"></div>
           <div className="bg-emerald-500/10 p-4 rounded-full text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-fit mx-auto">
             <CheckCircle2 className="h-12 w-12" />
           </div>
           <div className="space-y-2">
             <h3 className="text-2xl font-extrabold text-foreground">Obrigado!</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Suas respostas foram registradas com sucesso no sistema.
-            </p>
+            {token === 'preview' ? (
+              <div className="space-y-4">
+                <p className="text-sm text-amber-500 font-semibold leading-relaxed">
+                  Esta é uma visualização prévia. As respostas não foram salvas no banco. Veja a simulação das respostas capturadas:
+                </p>
+                <div className="text-left bg-muted/60 p-4 rounded-2xl space-y-3 max-h-60 overflow-y-auto border border-border">
+                  {Object.entries(respostasAcumuladas).map(([pergId, valor]) => {
+                    const perg = perguntas.find(p => p.id === pergId)
+                    return (
+                      <div key={pergId} className="text-xs space-y-1 border-b border-border/50 pb-2 last:border-b-0 last:pb-0">
+                        <div className="font-bold text-foreground">{perg?.titulo || pergId}:</div>
+                        <div className="text-muted-foreground bg-card p-2 rounded-lg border border-border/30 break-words font-mono">
+                          {Array.isArray(valor) ? valor.join(', ') : String(valor)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {Object.keys(respostasAcumuladas).length === 0 && (
+                    <div className="text-muted-foreground text-center py-2">Nenhuma resposta acumulada.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Suas respostas foram registradas com sucesso no sistema.
+              </p>
+            )}
           </div>
           <div className="text-muted-foreground/60 text-[10px] uppercase font-bold tracking-widest pt-4 border-t border-border">
             Andorinha Pesquisas

@@ -28,7 +28,8 @@ import {
   PlusCircle, 
   Trash2, 
   Sparkles,
-  Layers
+  Layers,
+  Eye
 } from 'lucide-react'
 
 const nodeTypes = {
@@ -435,22 +436,22 @@ export const Builder: React.FC = () => {
 
   // --- SALVAR FLUXO ---
 
-  const handleSaveFlow = async () => {
-    if (!fluxo) return
+  const handleSaveFlow = async (): Promise<boolean> => {
+    if (!fluxo) return false
 
     // Validações antes de salvar
     // 1. Início conectado a alguma coisa
     const isStartConnected = edges.some(e => e.source === 'start')
     if (!isStartConnected) {
       alert('Aviso: O nó "Início" não está conectado. Conecte-o a uma pergunta para que o fluxo possa começar.')
-      return
+      return false
     }
 
     // 2. Fim conectado a alguma coisa
     const isEndConnected = edges.some(e => e.target === 'end')
     if (!isEndConnected) {
       alert('Aviso: O nó "Fim" não está conectado. Conecte o final das perguntas a ele.')
-      return
+      return false
     }
 
     try {
@@ -498,9 +499,18 @@ export const Builder: React.FC = () => {
 
       await dbService.syncPerguntas(fluxo.id, perguntas)
       alert('Fluxo e perguntas sincronizadas com sucesso!')
+      return true
     } catch (err) {
       console.error(err)
       alert('Erro ao salvar o fluxo de perguntas.')
+      return false
+    }
+  }
+
+  const handlePreview = async () => {
+    const saved = await handleSaveFlow()
+    if (saved) {
+      window.open(`/r/preview?fluxo=${id}`, '_blank')
     }
   }
 
@@ -543,6 +553,13 @@ export const Builder: React.FC = () => {
           >
             <Plus className="h-4 w-4" />
             Adicionar Pergunta
+          </button>
+          <button
+            onClick={handlePreview}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
+          >
+            <Eye className="h-4 w-4" />
+            Visualizar Preview
           </button>
           <button
             onClick={handleSaveFlow}
