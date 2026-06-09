@@ -54,7 +54,7 @@ export interface Pesquisa {
 export interface Pergunta {
   id: string
   fluxo_id: string
-  tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email' | 'cpf' | 'cep' | 'estado' | 'cidade' | 'bairro' | 'logradouro'
+  tipo: 'texto_curto' | 'textarea' | 'multipla' | 'whatsapp' | 'email' | 'cpf' | 'cep' | 'estado' | 'cidade' | 'bairro' | 'logradouro' | 'numero'
   titulo: string
   obrigatoria: boolean
   ordem: number

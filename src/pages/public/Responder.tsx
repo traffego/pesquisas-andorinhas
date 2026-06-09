@@ -278,6 +278,13 @@ export const Responder: React.FC = () => {
             return false
           }
         }
+
+        if (perguntaAtual.tipo === 'numero') {
+          if (!/^-?\d+([.,]\d+)?$/.test(txt)) {
+            setValidacaoErro('Por favor, informe apenas números.')
+            return false
+          }
+        }
       }
     } else {
       // Múltipla escolha
@@ -776,7 +783,22 @@ export const Responder: React.FC = () => {
                 )
               })()}
 
-              {/* 11. Múltipla Escolha */}
+              {/* 11. Número */}
+              {perguntaAtual.tipo === 'numero' && (
+                <input
+                  type="number"
+                  value={valorAtual || ''}
+                  onChange={(e) => {
+                    setValorAtual(e.target.value)
+                    setValidacaoErro('')
+                  }}
+                  placeholder="Digite um número..."
+                  inputMode="numeric"
+                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              )}
+
+              {/* 12. Múltipla Escolha */}
               {perguntaAtual.tipo === 'multipla' && (
                 <div className="space-y-2.5">
                   {(perguntaAtual.config?.opcoes || []).map((opcao) => {
