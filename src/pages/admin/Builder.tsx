@@ -10,7 +10,6 @@ import {
   type Connection, 
   type Edge, 
   type Node, 
-  Panel,
   MarkerType
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -571,18 +570,7 @@ export const Builder: React.FC = () => {
           <Background color="#27272a" gap={16} size={1} />
           <Controls showInteractive={false} />
           
-          <Panel position="top-left" className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 max-w-[280px] shadow-2xl backdrop-blur-sm space-y-2">
-            <div className="flex gap-1.5 items-center text-[10px] font-bold text-violet-400 uppercase tracking-wider">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Instruções Rápidas</span>
-            </div>
-            <ul className="text-[10px] text-zinc-400 space-y-1 pl-1 list-disc list-inside leading-relaxed">
-              <li>Arraste bolinhas para conectar perguntas.</li>
-              <li>Múltipla escolha abre modal de regras.</li>
-              <li>Aresta laranja indica lógica condicional.</li>
-              <li>Passe o mouse na linha e clique no (X) para remover conexão.</li>
-            </ul>
-          </Panel>
+
         </ReactFlow>
       </div>
 
