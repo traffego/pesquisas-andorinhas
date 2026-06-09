@@ -7,6 +7,27 @@ export interface CategoriaCampo {
   created_at?: string
 }
 
+export interface FiltrosRelatorio {
+  objetoIds: string[]   // [] = todos
+  pesquisaIds: string[] // [] = todos
+  liderIds: string[]    // [] = todos
+  categoriasFiltros: {
+    categoriaId: string
+    categoriaNome: string
+    valoresSelecionados: string[] // [] = todos os valores
+  }[]
+}
+
+export interface RelatorioSalvo {
+  id: string
+  nome: string
+  descricao: string | null
+  filtros: FiltrosRelatorio
+  user_id?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Objeto {
   id: string
   nome: string
@@ -312,5 +333,118 @@ export const dbService = {
   async deleteCategoria(id: string): Promise<void> {
     const { error } = await supabase.from('categoria_campo').delete().eq('id', id)
     if (error) throw error
+  },
+
+  // --- RELATÓRIOS SALVOS ---
+  async getRelatoriosSalvos(): Promise<RelatorioSalvo[]> {
+    const { data, error } = await supabase
+      .from('relatorio_salvo')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async saveRelatorioSalvo(
+    rel: Omit<RelatorioSalvo, 'id' | 'created_at' | 'updated_at'> & { id?: string }
+  ): Promise<RelatorioSalvo> {
+    if (rel.id) {
+      const { data, error } = await supabase
+        .from('relatorio_salvo')
+        .update({ nome: rel.nome, descricao: rel.descricao, filtros: rel.filtros, updated_at: new Date().toISOString() })
+        .eq('id', rel.id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    } else {
+      const { data: userData } = await supabase.auth.getUser()
+      const { data, error } = await supabase
+        .from('relatorio_salvo')
+        .insert({ nome: rel.nome, descricao: rel.descricao, filtros: rel.filtros, user_id: userData.user?.id })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteRelatorioSalvo(id: string): Promise<void> {
+    const { error } = await supabase.from('relatorio_salvo').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  // --- RELATÓRIOS GLOBAIS ---
+  // Busca perguntas de múltiplos fluxos (via pesquisa_ids → fluxo_ids)
+  async getPerguntasByFluxos(fluxoIds: string[]): Promise<Pergunta[]> {
+    if (fluxoIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('pergunta')
+      .select('*')
+      .in('fluxo_id', fluxoIds)
+      .order('ordem', { ascending: true })
+    if (error) throw error
+    return data || []
+  },
+
+  // Busca respostas de múltiplas pesquisas com info de pesquisa/lider/objeto
+  async getRelatoriosGlobais(pesquisaIds: string[]): Promise<{
+    respostas: {
+      id: string
+      created_at: string
+      pesquisa_id: string
+      pesquisa_titulo: string
+      lider_nome: string | null
+      objeto_nome: string | null
+      valores: Record<string, any>
+    }[]
+    total: number
+  }> {
+    if (pesquisaIds.length === 0) return { respostas: [], total: 0 }
+
+    // Busca pesquisas com join lider e objeto
+    const { data: pesquisas, error: pErr } = await supabase
+      .from('pesquisa')
+      .select('id, titulo, lider:lider_id(nome), objeto:objeto_id(nome)')
+      .in('id', pesquisaIds)
+    if (pErr) throw pErr
+
+    // Busca respostas
+    const { data: respostas, error: rErr } = await supabase
+      .from('resposta')
+      .select('id, created_at, pesquisa_id')
+      .in('pesquisa_id', pesquisaIds)
+      .order('created_at', { ascending: false })
+    if (rErr) throw rErr
+    if (!respostas || respostas.length === 0) return { respostas: [], total: 0 }
+
+    // Busca itens
+    const respostaIds = respostas.map((r: any) => r.id)
+    const { data: itens, error: iErr } = await supabase
+      .from('resposta_item')
+      .select('resposta_id, pergunta_id, valor')
+      .in('resposta_id', respostaIds)
+    if (iErr) throw iErr
+
+    const pesquisaMap: Record<string, any> = {}
+    ;(pesquisas || []).forEach((p: any) => { pesquisaMap[p.id] = p })
+
+    const formatted = respostas.map((r: any) => {
+      const rItens = (itens || []).filter((i: any) => i.resposta_id === r.id)
+      const valores: Record<string, any> = {}
+      rItens.forEach((i: any) => { valores[i.pergunta_id] = i.valor })
+      const pesq = pesquisaMap[r.pesquisa_id]
+      return {
+        id: r.id,
+        created_at: r.created_at,
+        pesquisa_id: r.pesquisa_id,
+        pesquisa_titulo: pesq?.titulo || '',
+        lider_nome: pesq?.lider?.nome || null,
+        objeto_nome: pesq?.objeto?.nome || null,
+        valores
+      }
+    })
+
+    return { respostas: formatted, total: formatted.length }
   }
 }

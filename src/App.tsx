@@ -11,6 +11,7 @@ import { Pesquisas } from './pages/admin/Pesquisas'
 import { Builder } from './pages/admin/Builder'
 import { Distribuir } from './pages/admin/Distribuir'
 import { Relatorios } from './pages/admin/Relatorios'
+import { RelatoriosGlobais } from './pages/admin/RelatoriosGlobais'
 import { Responder } from './pages/public/Responder'
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
           <Route path="pesquisas" element={<Pesquisas />} />
           <Route path="pesquisas/:id/distribuir" element={<Distribuir />} />
           <Route path="pesquisas/:id/relatorios" element={<Relatorios />} />
+          <Route path="relatorios" element={<RelatoriosGlobais />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
 

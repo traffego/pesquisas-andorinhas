@@ -11,7 +11,8 @@ import {
   LogOut,
   Sun,
   Moon,
-  GitFork
+  GitFork,
+  BarChart2
 } from 'lucide-react'
 
 export const AdminLayout: React.FC = () => {
@@ -31,6 +32,7 @@ export const AdminLayout: React.FC = () => {
     { label: 'Líderes', path: '/admin/lideres', icon: Users2 },
     { label: 'Fluxos', path: '/admin/fluxos', icon: GitFork },
     { label: 'Pesquisas', path: '/admin/pesquisas', icon: ClipboardList },
+    { label: 'Relatórios', path: '/admin/relatorios', icon: BarChart2 },
   ]
 
   const isActive = (path: string) => location.pathname === path
