@@ -228,7 +228,12 @@ export const Responder: React.FC = () => {
     const isObrig = perguntaAtual.obrigatoria
     
     // Texto e outros campos normais
-    if (perguntaAtual.tipo !== 'multipla') {
+    if (perguntaAtual.tipo === 'avaliacao') {
+      if (isObrig && (valorAtual === '' || valorAtual === null || valorAtual === undefined)) {
+        setValidacaoErro('Por favor, selecione uma nota.')
+        return false
+      }
+    } else if (perguntaAtual.tipo !== 'multipla') {
       const txt = (valorAtual as string || '').trim()
       if (isObrig) {
         if (perguntaAtual.tipo === 'logradouro') {
@@ -286,6 +291,8 @@ export const Responder: React.FC = () => {
           }
         }
       }
+    } else if (perguntaAtual.tipo !== 'multipla') {
+      // Não faz nada para outros tipos sem validação específica
     } else {
       // Múltipla escolha
       const selecionadas = valorAtual as string[]
@@ -798,7 +805,50 @@ export const Responder: React.FC = () => {
                 />
               )}
 
-              {/* 12. Múltipla Escolha */}
+              {/* 12. Avaliação 0-10 */}
+              {perguntaAtual.tipo === 'avaliacao' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-11 gap-1.5">
+                    {Array.from({ length: 11 }, (_, i) => i).map((nota) => {
+                      const selecionada = valorAtual === nota || valorAtual === String(nota)
+                      const cor =
+                        nota <= 6
+                          ? selecionada
+                            ? 'bg-red-500 border-red-500 text-white shadow-red-500/30 shadow-md'
+                            : 'border-red-200 text-red-400 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40'
+                          : nota <= 8
+                          ? selecionada
+                            ? 'bg-amber-500 border-amber-500 text-white shadow-amber-500/30 shadow-md'
+                            : 'border-amber-200 text-amber-500 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/40'
+                          : selecionada
+                          ? 'bg-emerald-500 border-emerald-500 text-white shadow-emerald-500/30 shadow-md'
+                          : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40'
+                      return (
+                        <button
+                          key={nota}
+                          type="button"
+                          onClick={() => { setValorAtual(nota); setValidacaoErro('') }}
+                          className={`aspect-square rounded-xl border-2 font-bold text-sm transition-all duration-150 active:scale-90 cursor-pointer ${cor}`}
+                        >
+                          {nota}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-between text-[10px] font-semibold text-muted-foreground px-0.5">
+                    <span>😟 Muito insatisfeito</span>
+                    <span>Muito satisfeito 😄</span>
+                  </div>
+                  {(valorAtual !== '' && valorAtual !== null && valorAtual !== undefined) && (
+                    <div className="text-center py-2 rounded-2xl bg-card border border-border">
+                      <span className="text-4xl font-extrabold text-foreground">{valorAtual}</span>
+                      <span className="text-muted-foreground text-lg"> / 10</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 13. Múltipla Escolha */}
               {perguntaAtual.tipo === 'multipla' && (
                 <div className="space-y-2.5">
                   {(perguntaAtual.config?.opcoes || []).map((opcao) => {

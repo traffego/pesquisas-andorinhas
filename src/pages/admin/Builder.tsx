@@ -624,6 +624,7 @@ export const Builder: React.FC = () => {
                   <option value="bairro">Bairro</option>
                   <option value="logradouro">Logradouro (Rua/Av/etc.)</option>
                   <option value="numero">Número</option>
+                  <option value="avaliacao">Avaliação (0 – 10)</option>
                 </select>
               </div>
 
