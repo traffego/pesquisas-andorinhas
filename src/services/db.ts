@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabase'
 
+export interface CategoriaCampo {
+  id: string
+  nome: string
+  user_id?: string
+  created_at?: string
+}
+
 export interface Objeto {
   id: string
   nome: string
@@ -51,6 +58,7 @@ export interface Pergunta {
   titulo: string
   obrigatoria: boolean
   ordem: number
+  categoria_id?: string | null
   config: {
     opcoes?: { id: string; texto: string }[]
     min_respostas?: number
@@ -279,5 +287,30 @@ export const dbService = {
     })
 
     return { totalRespostas: respostas.length, respostas: formatted }
+  },
+
+  // --- CATEGORIAS DE CAMPO ---
+  async getCategorias(): Promise<CategoriaCampo[]> {
+    const { data, error } = await supabase.from('categoria_campo').select('*').order('nome', { ascending: true })
+    if (error) throw error
+    return data || []
+  },
+
+  async saveCategoria(categoria: Omit<CategoriaCampo, 'id' | 'created_at'> & { id?: string }): Promise<CategoriaCampo> {
+    if (categoria.id) {
+      const { data, error } = await supabase.from('categoria_campo').update({ nome: categoria.nome }).eq('id', categoria.id).select().single()
+      if (error) throw error
+      return data
+    } else {
+      const { data: userData } = await supabase.auth.getUser()
+      const { data, error } = await supabase.from('categoria_campo').insert({ nome: categoria.nome, user_id: userData.user?.id }).select().single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteCategoria(id: string): Promise<void> {
+    const { error } = await supabase.from('categoria_campo').delete().eq('id', id)
+    if (error) throw error
   }
 }

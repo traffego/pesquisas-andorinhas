@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { dbService, type Fluxo, type Pergunta } from '../../services/db'
+import { dbService, type Fluxo, type Pergunta, type CategoriaCampo } from '../../services/db'
 import { StartNode } from '../../components/builder/StartNode'
 import { EndNode } from '../../components/builder/EndNode'
 import { QuestionNode } from '../../components/builder/QuestionNode'
@@ -64,6 +64,10 @@ export const Builder: React.FC = () => {
   const [qOpcoes, setQOpcoes] = useState<{ id: string; texto: string }[]>([])
   const [newOpcaoTexto, setNewOpcaoTexto] = useState('')
   const [qMaxRespostas, setQMaxRespostas] = useState<string>('1')
+  const [qCategoriaId, setQCategoriaId] = useState<string>('')
+
+  // Categorias de campos
+  const [categorias, setCategorias] = useState<CategoriaCampo[]>([])
 
   // Estados do formulário de Aresta Condicional
   const pendingConnectionRef = useRef<Connection | null>(null)
@@ -84,10 +88,20 @@ export const Builder: React.FC = () => {
     }
   }
 
+  const loadCategorias = async () => {
+    try {
+      const list = await dbService.getCategorias()
+      setCategorias(list)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     if (id) {
       loadFluxo(id)
       loadFluxosDisponiveis()
+      loadCategorias()
     }
   }, [id])
 
@@ -148,6 +162,7 @@ export const Builder: React.FC = () => {
     setQOpcoes([])
     setNewOpcaoTexto('')
     setQMaxRespostas('1')
+    setQCategoriaId('')
     setIsQuestionModalOpen(true)
   }
 
@@ -163,6 +178,7 @@ export const Builder: React.FC = () => {
         setNewOpcaoTexto('')
         const maxR = (node.data.config as any)?.max_respostas
         setQMaxRespostas(maxR ? String(maxR) : 'livre')
+        setQCategoriaId((node.data.categoria_id as string) || '')
         setIsQuestionModalOpen(true)
       }
       return nds
@@ -273,6 +289,7 @@ export const Builder: React.FC = () => {
                 titulo: qTitulo,
                 tipo: qTipo,
                 obrigatoria: qObrigatoria,
+                categoria_id: qCategoriaId || null,
                 config: { 
                   opcoes: configOpcoes,
                   min_respostas: qTipo === 'multipla' ? 1 : undefined,
@@ -296,6 +313,7 @@ export const Builder: React.FC = () => {
           titulo: qTitulo,
           tipo: qTipo,
           obrigatoria: qObrigatoria,
+          categoria_id: qCategoriaId || null,
           config: { 
             opcoes: configOpcoes,
             min_respostas: qTipo === 'multipla' ? 1 : undefined,
@@ -475,6 +493,7 @@ export const Builder: React.FC = () => {
         titulo: q.data.titulo as string,
         obrigatoria: q.data.obrigatoria as boolean,
         ordem: idx + 1,
+        categoria_id: (q.data.categoria_id as string) || null,
         config: q.data.config as any
       }))
 
@@ -619,6 +638,27 @@ export const Builder: React.FC = () => {
                   placeholder="Ex: Qual o seu nível de satisfação?"
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none transition-colors text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  Categoria do Campo
+                </label>
+                <select
+                  value={qCategoriaId}
+                  onChange={(e) => setQCategoriaId(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-primary focus:outline-none transition-colors text-sm"
+                >
+                  <option value="">— Sem categoria —</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                  ))}
+                </select>
+                {categorias.length === 0 && (
+                  <p className="text-[10px] text-zinc-500 mt-1.5">
+                    Crie categorias em Fluxos → Categorias de Campos.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between bg-zinc-950/40 border border-zinc-800 p-4 rounded-xl">

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { dbService, type Fluxo } from '../../services/db'
-import { Plus, Edit2, Trash2, X, GitFork, ArrowRight } from 'lucide-react'
+import { CategoriasCampo } from './CategoriasCampo'
+import { Plus, Edit2, Trash2, X, GitFork, ArrowRight, Tag } from 'lucide-react'
 
 export const Fluxos: React.FC = () => {
   const [fluxos, setFluxos] = useState<Fluxo[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'fluxos' | 'categorias'>('fluxos')
 
   // Form states
   const [id, setId] = useState<string | undefined>(undefined)
@@ -92,6 +94,7 @@ export const Fluxos: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in text-foreground">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Fluxos de Pesquisa</h1>
@@ -99,16 +102,51 @@ export const Fluxos: React.FC = () => {
             Crie e gerencie as estruturas lógicas de perguntas reutilizáveis para suas pesquisas.
           </p>
         </div>
+        {activeTab === 'fluxos' && (
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Fluxo
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border">
         <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+          onClick={() => setActiveTab('fluxos')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'fluxos'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
         >
-          <Plus className="h-4 w-4" />
-          Novo Fluxo
+          <GitFork className="h-4 w-4" />
+          Fluxos
+        </button>
+        <button
+          onClick={() => setActiveTab('categorias')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'categorias'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Tag className="h-4 w-4" />
+          Categorias de Campos
         </button>
       </div>
 
-      {fluxos.length === 0 ? (
+      {/* Conteúdo da tab ativa */}
+      {activeTab === 'categorias' ? (
+        <CategoriasCampo />
+      ) : loading ? (
+        <div className="flex h-[400px] w-full items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        </div>
+      ) : fluxos.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed border-border rounded-2xl bg-card/20 backdrop-blur-sm">
           <GitFork className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
           <h3 className="text-lg font-bold text-foreground">Nenhum fluxo encontrado</h3>
