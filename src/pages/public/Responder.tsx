@@ -573,6 +573,17 @@ export const Responder: React.FC = () => {
   }
 
   if (respondeu) {
+    const handleReiniciarPreview = () => {
+      setRespondeu(false)
+      setRespostasAcumuladas({})
+      setValorAtual('')
+      setValidacaoErro('')
+      setSubflowStack([])
+      setCurrentNodeId('start')
+      const fp = getDeviceFingerprint()
+      loadFlow(token!, fp)
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl relative overflow-hidden">
@@ -585,9 +596,9 @@ export const Responder: React.FC = () => {
             {token === 'preview' ? (
               <div className="space-y-4">
                 <p className="text-sm text-amber-500 font-semibold leading-relaxed">
-                  Esta é uma visualização prévia. As respostas não foram salvas no banco. Veja a simulação das respostas capturadas:
+                  Modo de visualização. Respostas não foram salvas.
                 </p>
-                <div className="text-left bg-muted/60 p-4 rounded-2xl space-y-3 max-h-60 overflow-y-auto border border-border">
+                <div className="text-left bg-muted/60 p-4 rounded-2xl space-y-3 max-h-52 overflow-y-auto border border-border">
                   {Object.entries(respostasAcumuladas).map(([pergId, valor]) => {
                     const perg = perguntas.find(p => p.id === pergId)
                     return (
@@ -603,6 +614,12 @@ export const Responder: React.FC = () => {
                     <div className="text-muted-foreground text-center py-2">Nenhuma resposta acumulada.</div>
                   )}
                 </div>
+                <button
+                  onClick={handleReiniciarPreview}
+                  className="w-full rounded-2xl border border-primary/40 bg-primary/10 text-primary font-bold py-3 text-sm hover:bg-primary/20 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  ↺ Reiniciar Simulação
+                </button>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground leading-relaxed">

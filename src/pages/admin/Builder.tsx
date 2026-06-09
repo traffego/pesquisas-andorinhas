@@ -499,11 +499,9 @@ export const Builder: React.FC = () => {
       }))
 
       await dbService.syncPerguntas(fluxo.id, perguntas)
-      alert('Fluxo e perguntas sincronizadas com sucesso!')
       return true
     } catch (err) {
       console.error(err)
-      alert('Erro ao salvar o fluxo de perguntas.')
       return false
     }
   }
