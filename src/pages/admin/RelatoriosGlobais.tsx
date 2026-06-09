@@ -7,7 +7,8 @@ import {
   type Pergunta,
   type CategoriaCampo,
   type FiltrosRelatorio,
-  type RelatorioSalvo
+  type RelatorioSalvo,
+  type Fluxo
 } from '../../services/db'
 import * as XLSX from 'xlsx'
 import {
@@ -127,6 +128,7 @@ export const RelatoriosGlobais: React.FC = () => {
   const [categorias, setCategorias] = useState<CategoriaCampo[]>([])
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [relatoriosSalvos, setRelatoriosSalvos] = useState<RelatorioSalvo[]>([])
+  const [todosFluxos, setTodosFluxos] = useState<Fluxo[]>([])
   const [loadingBase, setLoadingBase] = useState(true)
 
   // Filtros ativos
@@ -152,18 +154,20 @@ export const RelatoriosGlobais: React.FC = () => {
     ;(async () => {
       setLoadingBase(true)
       try {
-        const [objs, pesqs, lids, cats, rels] = await Promise.all([
+        const [objs, pesqs, lids, cats, rels, fluxos] = await Promise.all([
           dbService.getObjetos(),
           dbService.getPesquisas(),
           dbService.getLideres(),
           dbService.getCategorias(),
-          dbService.getRelatoriosSalvos()
+          dbService.getRelatoriosSalvos(),
+          dbService.getFluxos()
         ])
         setObjetos(objs)
         setTodasPesquisas(pesqs)
         setLideres(lids)
         setCategorias(cats)
         setRelatoriosSalvos(rels)
+        setTodosFluxos(fluxos)
       } catch (err) {
         console.error(err)
       } finally {
@@ -184,13 +188,40 @@ export const RelatoriosGlobais: React.FC = () => {
     setPesquisaIds(prev => prev.filter(id => validIds.includes(id)))
   }, [pesquisasFiltradas])
 
+  // Encontra recursivamente todos os subfluxos de um conjunto de fluxos
+  const getRecursiveFluxoIds = useCallback((initialIds: string[]): string[] => {
+    const visited = new Set<string>()
+    const queue = [...initialIds]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()
+      if (!currentId || visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const fluxo = todosFluxos.find(f => f.id === currentId)
+      if (fluxo && fluxo.flow_data && Array.isArray(fluxo.flow_data.nodes)) {
+        fluxo.flow_data.nodes.forEach((node: any) => {
+          if (node.type === 'subflow' && node.data?.subflowId) {
+            const subId = node.data.subflowId
+            if (!visited.has(subId)) {
+              queue.push(subId)
+            }
+          }
+        })
+      }
+    }
+
+    return Array.from(visited)
+  }, [todosFluxos])
+
   // ── Carrega perguntas quando pesquisas mudam ────────────────────────────────
   useEffect(() => {
     const idsAlvo = pesquisaIds.length > 0
       ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id))
       : pesquisasFiltradas
 
-    const fluxoIds = [...new Set(idsAlvo.map(p => p.fluxo_id).filter(Boolean) as string[])]
+    const mainFluxoIds = [...new Set(idsAlvo.map(p => p.fluxo_id).filter(Boolean) as string[])]
+    const fluxoIds = getRecursiveFluxoIds(mainFluxoIds)
 
     if (fluxoIds.length === 0) {
       setPerguntas([])
@@ -198,7 +229,7 @@ export const RelatoriosGlobais: React.FC = () => {
     }
 
     dbService.getPerguntasByFluxos(fluxoIds).then(setPerguntas).catch(console.error)
-  }, [pesquisaIds, pesquisasFiltradas])
+  }, [pesquisaIds, pesquisasFiltradas, getRecursiveFluxoIds])
 
   // ── Valores disponíveis por categoria ─────────────────────────────────────
   const valoresPorCategoria = useMemo(() => {
