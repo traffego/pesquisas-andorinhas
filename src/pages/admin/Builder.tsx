@@ -20,6 +20,7 @@ import { EndNode } from '../../components/builder/EndNode'
 import { QuestionNode } from '../../components/builder/QuestionNode'
 import { SubflowNode } from '../../components/builder/SubflowNode'
 import { ButtonEdge } from '../../components/builder/ButtonEdge'
+import { BlockNode } from '../../components/builder/BlockNode'
 import { 
   ArrowLeft, 
   Save, 
@@ -29,14 +30,19 @@ import {
   Trash2, 
   Sparkles,
   Layers,
-  Eye
+  Eye,
+  LayoutGrid,
+  ArrowUp,
+  ArrowDown,
+  Edit2
 } from 'lucide-react'
 
 const nodeTypes = {
   start: StartNode,
   end: EndNode,
   question: QuestionNode,
-  subflow: SubflowNode
+  subflow: SubflowNode,
+  block: BlockNode
 }
 
 const edgeTypes = {
@@ -79,6 +85,13 @@ export const Builder: React.FC = () => {
   const [isSubflowModalOpen, setIsSubflowModalOpen] = useState(false)
   const [editingSubflowNodeId, setEditingSubflowNodeId] = useState<string | null>(null)
   const [selectedSubflowId, setSelectedSubflowId] = useState<string>('')
+
+  // Estados do Bloco
+  const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
+  const [editingBlockNodeId, setEditingBlockNodeId] = useState<string | null>(null)
+  const [bTitulo, setBTitulo] = useState('')
+  const [bPerguntas, setBPerguntas] = useState<any[]>([])
+  const [addingQuestionToBlock, setAddingQuestionToBlock] = useState(false)
 
   const loadFluxosDisponiveis = async () => {
     try {
@@ -138,6 +151,16 @@ export const Builder: React.FC = () => {
               ...n.data,
               onEdit: handleOpenEditSubflow,
               onDelete: handleDeleteSubflowNode
+            }
+          }
+        }
+        if (n.type === 'block') {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              onEdit: handleOpenEditBlock,
+              onDelete: handleDeleteBlockNode
             }
           }
         }
@@ -261,6 +284,116 @@ export const Builder: React.FC = () => {
     setIsSubflowModalOpen(false)
   }
 
+  // --- LÓGICA DE BLOCOS (NÓS) ---
+
+  const handleOpenAddBlock = () => {
+    setEditingBlockNodeId(null)
+    setBTitulo('')
+    setBPerguntas([])
+    setIsBlockModalOpen(true)
+  }
+
+  const handleOpenEditBlock = useCallback((nodeId: string) => {
+    setNodes((nds) => {
+      const node = nds.find(n => n.id === nodeId)
+      if (node) {
+        setEditingBlockNodeId(nodeId)
+        setBTitulo(node.data.titulo as string || '')
+        setBPerguntas(node.data.perguntas as any[] || [])
+        setIsBlockModalOpen(true)
+      }
+      return nds
+    })
+  }, [setNodes])
+
+  const handleDeleteBlockNode = useCallback((nodeId: string) => {
+    if (!confirm('Deseja excluir este bloco do fluxo? Conexões ligadas a ele serão perdidas.')) return
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId))
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+  }, [setNodes, setEdges])
+
+  const handleSaveBlock = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!bTitulo.trim()) return
+
+    if (editingBlockNodeId) {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === editingBlockNodeId) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                titulo: bTitulo.trim(),
+                perguntas: bPerguntas
+              }
+            }
+          }
+          return n
+        })
+      )
+    } else {
+      const newId = crypto.randomUUID()
+      const newNode: Node = {
+        id: newId,
+        type: 'block',
+        position: { x: 250, y: 350 },
+        data: {
+          id: newId,
+          titulo: bTitulo.trim(),
+          perguntas: bPerguntas,
+          onEdit: handleOpenEditBlock,
+          onDelete: handleDeleteBlockNode
+        }
+      }
+      setNodes((nds) => [...nds, newNode])
+    }
+
+    setIsBlockModalOpen(false)
+  }
+
+  // Ações de campos internos ao Bloco
+  const handleAddQuestionToBlock = () => {
+    setEditingQuestionId(null)
+    setQTitulo('')
+    setQTipo('texto_curto')
+    setQObrigatoria(true)
+    setQOpcoes([])
+    setNewOpcaoTexto('')
+    setQMaxRespostas('1')
+    setQCategoriaId('')
+    setAddingQuestionToBlock(true)
+    setIsQuestionModalOpen(true)
+  }
+
+  const handleEditQuestionInBlock = (q: any) => {
+    setEditingQuestionId(q.id)
+    setQTitulo(q.titulo)
+    setQTipo(q.tipo)
+    setQObrigatoria(q.obrigatoria)
+    setQOpcoes(q.config?.opcoes || [])
+    setNewOpcaoTexto('')
+    const maxR = q.config?.max_respostas
+    setQMaxRespostas(maxR ? String(maxR) : 'livre')
+    setQCategoriaId(q.categoria_id || '')
+    setAddingQuestionToBlock(true)
+    setIsQuestionModalOpen(true)
+  }
+
+  const handleDeleteQuestionInBlock = (qId: string) => {
+    setBPerguntas(prev => prev.filter(q => q.id !== qId))
+  }
+
+  const handleMoveQuestionInBlock = (index: number, direction: 'up' | 'down') => {
+    const nextIndex = direction === 'up' ? index - 1 : index + 1
+    if (nextIndex < 0 || nextIndex >= bPerguntas.length) return
+    const list = [...bPerguntas]
+    const temp = list[index]
+    list[index] = list[nextIndex]
+    list[nextIndex] = temp
+    setBPerguntas(list)
+  }
+
   const handleAddOpcao = () => {
     if (!newOpcaoTexto.trim()) return
     setQOpcoes([...qOpcoes, { id: crypto.randomUUID(), texto: newOpcaoTexto.trim() }])
@@ -278,6 +411,30 @@ export const Builder: React.FC = () => {
     const configOpcoes = qTipo === 'multipla' ? qOpcoes : undefined
     const maxRespostasVal = qTipo === 'multipla' && qMaxRespostas !== 'livre' ? Number(qMaxRespostas) : undefined
 
+    const qData = {
+      id: editingQuestionId || crypto.randomUUID(),
+      titulo: qTitulo,
+      tipo: qTipo,
+      obrigatoria: qObrigatoria,
+      categoria_id: qCategoriaId || null,
+      config: { 
+        opcoes: configOpcoes,
+        min_respostas: qTipo === 'multipla' ? 1 : undefined,
+        max_respostas: maxRespostasVal
+      }
+    }
+
+    if (addingQuestionToBlock) {
+      if (editingQuestionId) {
+        setBPerguntas(prev => prev.map(q => q.id === editingQuestionId ? qData : q))
+      } else {
+        setBPerguntas(prev => [...prev, qData])
+      }
+      setIsQuestionModalOpen(false)
+      setAddingQuestionToBlock(false)
+      return
+    }
+
     if (editingQuestionId) {
       // Editar nó existente
       setNodes((nds) =>
@@ -287,15 +444,7 @@ export const Builder: React.FC = () => {
               ...n,
               data: {
                 ...n.data,
-                titulo: qTitulo,
-                tipo: qTipo,
-                obrigatoria: qObrigatoria,
-                categoria_id: qCategoriaId || null,
-                config: { 
-                  opcoes: configOpcoes,
-                  min_respostas: qTipo === 'multipla' ? 1 : undefined,
-                  max_respostas: maxRespostasVal
-                }
+                ...qData
               }
             }
           }
@@ -304,22 +453,13 @@ export const Builder: React.FC = () => {
       )
     } else {
       // Adicionar novo nó de pergunta no centro aproximado
-      const newId = crypto.randomUUID()
+      const newId = qData.id
       const newNode: Node = {
         id: newId,
         type: 'question',
         position: { x: 250, y: 350 },
         data: {
-          id: newId,
-          titulo: qTitulo,
-          tipo: qTipo,
-          obrigatoria: qObrigatoria,
-          categoria_id: qCategoriaId || null,
-          config: { 
-            opcoes: configOpcoes,
-            min_respostas: qTipo === 'multipla' ? 1 : undefined,
-            max_respostas: maxRespostasVal
-          },
+          ...qData,
           onEdit: handleOpenEditQuestion,
           onDelete: handleDeleteQuestionNode
         }
@@ -469,7 +609,8 @@ export const Builder: React.FC = () => {
             obrigatoria: n.data.obrigatoria,
             config: n.data.config,
             subflowId: n.data.subflowId,
-            subflowTitulo: n.data.subflowTitulo
+            subflowTitulo: n.data.subflowTitulo,
+            perguntas: n.data.perguntas
           }
         })),
         edges
@@ -482,21 +623,38 @@ export const Builder: React.FC = () => {
       })
 
       // 3. Sincroniza tabela de perguntas
-      const questionNodes = nodes.filter(n => n.type === 'question')
-      
-      // Precisamos dar uma ordem sequencial aproximada baseada na posição Y do nó no grafo
-      const sortedQuestions = [...questionNodes].sort((a, b) => a.position.y - b.position.y)
+      const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y)
+      const perguntas: Omit<Pergunta, 'created_at'>[] = []
+      let ordem = 1
 
-      const perguntas: Omit<Pergunta, 'created_at'>[] = sortedQuestions.map((q, idx) => ({
-        id: q.id,
-        fluxo_id: fluxo.id,
-        tipo: q.data.tipo as Pergunta['tipo'],
-        titulo: q.data.titulo as string,
-        obrigatoria: q.data.obrigatoria as boolean,
-        ordem: idx + 1,
-        categoria_id: (q.data.categoria_id as string) || null,
-        config: q.data.config as any
-      }))
+      sortedNodes.forEach(node => {
+        if (node.type === 'question') {
+          perguntas.push({
+            id: node.id,
+            fluxo_id: fluxo.id,
+            tipo: node.data.tipo as Pergunta['tipo'],
+            titulo: node.data.titulo as string,
+            obrigatoria: node.data.obrigatoria as boolean,
+            ordem: ordem++,
+            categoria_id: (node.data.categoria_id as string) || null,
+            config: node.data.config as any
+          })
+        } else if (node.type === 'block') {
+          const subPergs = (node.data.perguntas || []) as any[]
+          subPergs.forEach(sub => {
+            perguntas.push({
+              id: sub.id,
+              fluxo_id: fluxo.id,
+              tipo: sub.tipo,
+              titulo: sub.titulo,
+              obrigatoria: sub.obrigatoria,
+              ordem: ordem++,
+              categoria_id: sub.categoria_id || null,
+              config: sub.config || {}
+            })
+          })
+        }
+      })
 
       await dbService.syncPerguntas(fluxo.id, perguntas)
       return true
@@ -545,6 +703,13 @@ export const Builder: React.FC = () => {
           >
             <Layers className="h-4 w-4" />
             Adicionar Subfluxo
+          </button>
+          <button
+            onClick={handleOpenAddBlock}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Adicionar Bloco
           </button>
           <button
             onClick={handleOpenAddQuestion}
@@ -917,6 +1082,137 @@ export const Builder: React.FC = () => {
                 className="w-full h-full border-none"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: ADICIONAR / EDITAR BLOCO */}
+      {isBlockModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-5">
+              <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
+                <LayoutGrid className="h-5 w-5 text-sky-400" />
+                {editingBlockNodeId ? 'Editar Bloco' : 'Criar Bloco de Campos'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setIsBlockModalOpen(false); setAddingQuestionToBlock(false) }}
+                className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBlock} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  Título do Bloco (Ex: Endereço, Dados Pessoais)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={bTitulo}
+                  onChange={(e) => setBTitulo(e.target.value)}
+                  placeholder="Ex: Endereço"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none transition-colors text-sm"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-zinc-800/80 pb-2">
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Campos do Bloco
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddQuestionToBlock}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Adicionar Campo
+                  </button>
+                </div>
+
+                {bPerguntas.length === 0 ? (
+                  <p className="text-xs text-zinc-500 italic text-center py-6">
+                    Nenhum campo adicionado. Clique em "Adicionar Campo" acima.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    {bPerguntas.map((q, idx) => (
+                      <div key={q.id} className="flex justify-between items-center bg-zinc-950/60 p-3 rounded-xl border border-zinc-850 hover:border-zinc-800 transition-all gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] bg-sky-950/50 border border-sky-900/30 text-sky-400 px-1.5 py-0.2 rounded font-bold uppercase">
+                              {q.tipo}
+                            </span>
+                            {q.obrigatoria && (
+                              <span className="text-[9px] text-red-400 font-bold">* obrigatório</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-semibold text-zinc-200 truncate mt-1">{q.titulo}</p>
+                        </div>
+
+                        {/* Ações do campo */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveQuestionInBlock(idx, 'up')}
+                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 disabled:opacity-30 disabled:hover:bg-zinc-900 cursor-pointer"
+                            title="Mover para cima"
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === bPerguntas.length - 1}
+                            onClick={() => handleMoveQuestionInBlock(idx, 'down')}
+                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 disabled:opacity-30 disabled:hover:bg-zinc-900 cursor-pointer"
+                            title="Mover para baixo"
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditQuestionInBlock(q)}
+                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                            title="Editar campo"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuestionInBlock(q.id)}
+                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-red-950/25 text-zinc-400 hover:text-red-400 cursor-pointer"
+                            title="Remover campo"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsBlockModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-hover rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
+                >
+                  {editingBlockNodeId ? 'Salvar Alterações' : 'Criar Bloco'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

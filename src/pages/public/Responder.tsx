@@ -38,6 +38,7 @@ export const Responder: React.FC = () => {
   // Estado do fluxo de respostas
   const [currentNodeId, setCurrentNodeId] = useState<string>('start')
   const [respostasAcumuladas, setRespostasAcumuladas] = useState<Record<string, any>>({})
+  const [errosCampos, setErrosCampos] = useState<Record<string, string>>({})
   
   // Resposta da tela atual
   const [valorAtual, setValorAtual] = useState<any>('')
@@ -208,50 +209,7 @@ export const Responder: React.FC = () => {
     }
   }
 
-  // --- MÁSCARAS ---
-  const applyWhatsappMask = (val: string) => {
-    const numbers = val.replace(/\D/g, '')
-    if (numbers.length <= 2) return numbers
-    if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`
-    if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`
-    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`
-  }
 
-  const applyCpfMask = (val: string) => {
-    const n = val.replace(/\D/g, '').slice(0, 11)
-    if (n.length <= 3) return n
-    if (n.length <= 6) return `${n.slice(0, 3)}.${n.slice(3)}`
-    if (n.length <= 9) return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6)}`
-    return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`
-  }
-
-  const applyCepMask = (val: string) => {
-    const n = val.replace(/\D/g, '').slice(0, 8)
-    if (n.length <= 5) return n
-    return `${n.slice(0, 5)}-${n.slice(5)}`
-  }
-
-  // --- SELEÇÃO DE MÚLTIPLA ESCOLHA ---
-  const handleToggleOpcao = (opcaoId: string) => {
-    const selecionadas = Array.isArray(valorAtual) ? [...valorAtual] : []
-    const maxRespostas = perguntaAtual?.config?.max_respostas
-
-    if (selecionadas.includes(opcaoId)) {
-      setValorAtual(selecionadas.filter(id => id !== opcaoId))
-      setValidacaoErro('')
-    } else {
-      if (maxRespostas === 1) {
-        // Seleção única (comportamento de Radio)
-        setValorAtual([opcaoId])
-        setValidacaoErro('')
-      } else if (maxRespostas && selecionadas.length >= maxRespostas) {
-        setValidacaoErro(`Você pode selecionar no máximo ${maxRespostas} opções.`)
-      } else {
-        setValorAtual([...selecionadas, opcaoId])
-        setValidacaoErro('')
-      }
-    }
-  }
 
   // --- BUSCA PERGUNTA ATUAL ---
   const getPerguntaAtual = (): Pergunta | undefined => {
@@ -260,103 +218,422 @@ export const Responder: React.FC = () => {
 
   const perguntaAtual = getPerguntaAtual()
 
-  // Limpa o valor de entrada quando muda o nó da pergunta
+  const currentNode = flowData?.nodes?.find((n: any) => n.id === currentNodeId)
+  const isBlock = currentNode?.type === 'block'
+  const blockPerguntas = isBlock ? (currentNode.data.perguntas || []) as any[] : []
+
+  // Limpa o valor de entrada quando muda o nó da pergunta ou bloco
   useEffect(() => {
-    if (perguntaAtual) {
+    if (isBlock) {
+      const blockVals: Record<string, any> = {}
+      blockPerguntas.forEach(sub => {
+        const anterior = respostasAcumuladas[sub.id]
+        blockVals[sub.id] = anterior !== undefined ? anterior : (sub.tipo === 'multipla' ? [] : '')
+      })
+      setValorAtual(blockVals)
+      setErrosCampos({})
+    } else if (perguntaAtual) {
       // Pré-carrega se já foi respondida
       const anterior = respostasAcumuladas[perguntaAtual.id]
       setValorAtual(anterior !== undefined ? anterior : (perguntaAtual.tipo === 'multipla' ? [] : ''))
       setValidacaoErro('')
     }
-  }, [currentNodeId, perguntaAtual])
+  }, [currentNodeId, perguntaAtual, isBlock, flowData])
 
   // --- VALIDAÇÕES DE TELA ---
-  const validarResposta = (): boolean => {
-    if (!perguntaAtual) return true
-
-    const isObrig = perguntaAtual.obrigatoria
+  const validarUmaResposta = (perg: any, valor: any): string => {
+    const isObrig = perg.obrigatoria
     
-    // Texto e outros campos normais
-    if (perguntaAtual.tipo === 'avaliacao') {
-      if (isObrig && (valorAtual === '' || valorAtual === null || valorAtual === undefined)) {
-        setValidacaoErro('Por favor, selecione uma nota.')
-        return false
+    if (perg.tipo === 'avaliacao') {
+      if (isObrig && (valor === '' || valor === null || valor === undefined)) {
+        return 'Por favor, selecione uma nota.'
       }
-    } else if (perguntaAtual.tipo !== 'multipla') {
-      const txt = (valorAtual as string || '').trim()
+    } else if (perg.tipo !== 'multipla') {
+      const txt = (valor as string || '').trim()
       if (isObrig) {
-        if (perguntaAtual.tipo === 'logradouro') {
-          const valStr = (valorAtual as string || '').trim()
+        if (perg.tipo === 'logradouro') {
+          const valStr = (valor as string || '').trim()
           const tiposLogradouro = ['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro']
           const match = tiposLogradouro.find(t => valStr.startsWith(t + ' '))
           const nome = match ? valStr.slice(match.length + 1).trim() : valStr.trim()
           if (!nome) {
-            setValidacaoErro('Esta resposta é obrigatória.')
-            return false
+            return 'Esta resposta é obrigatória.'
           }
         } else if (!txt) {
-          setValidacaoErro('Esta resposta é obrigatória.')
-          return false
+          return 'Esta resposta é obrigatória.'
         }
       }
 
       if (txt) {
-        if (perguntaAtual.tipo === 'email') {
+        if (perg.tipo === 'email') {
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
           if (!emailRegex.test(txt)) {
-            setValidacaoErro('Por favor, informe um endereço de e-mail válido.')
-            return false
+            return 'Por favor, informe um endereço de e-mail válido.'
           }
         }
 
-        if (perguntaAtual.tipo === 'whatsapp') {
+        if (perg.tipo === 'whatsapp') {
           const digits = txt.replace(/\D/g, '')
           if (digits.length < 10 || digits.length > 11) {
-            setValidacaoErro('Por favor, insira o número de celular completo com DDD.')
-            return false
+            return 'Por favor, insira o número de celular completo com DDD.'
           }
         }
 
-        if (perguntaAtual.tipo === 'cpf') {
+        if (perg.tipo === 'cpf') {
           const digits = txt.replace(/\D/g, '')
           if (digits.length !== 11) {
-            setValidacaoErro('CPF inválido. Informe os 11 dígitos.')
-            return false
+            return 'CPF inválido. Informe os 11 dígitos.'
           }
         }
 
-        if (perguntaAtual.tipo === 'cep') {
+        if (perg.tipo === 'cep') {
           const digits = txt.replace(/\D/g, '')
           if (digits.length !== 8) {
-            setValidacaoErro('CEP inválido. Informe os 8 dígitos.')
-            return false
+            return 'CEP inválido. Informe os 8 dígitos.'
           }
         }
 
-        if (perguntaAtual.tipo === 'numero') {
+        if (perg.tipo === 'numero') {
           if (!/^-?\d+([.,]\d+)?$/.test(txt)) {
-            setValidacaoErro('Por favor, informe apenas números.')
-            return false
+            return 'Por favor, informe apenas números.'
           }
         }
       }
-    } else if (perguntaAtual.tipo !== 'multipla') {
-      // Não faz nada para outros tipos sem validação específica
     } else {
       // Múltipla escolha
-      const selecionadas = valorAtual as string[]
-      if (isObrig && selecionadas.length === 0) {
-        setValidacaoErro('Por favor, selecione pelo menos uma opção.')
-        return false
+      const selecionadas = valor as string[]
+      if (isObrig && (!selecionadas || selecionadas.length === 0)) {
+        return 'Por favor, selecione pelo menos uma opção.'
       }
-      const maxRespostas = perguntaAtual.config?.max_respostas
+      const maxRespostas = perg.config?.max_respostas
       if (maxRespostas && selecionadas.length > maxRespostas) {
-        setValidacaoErro(`Por favor, selecione no máximo ${maxRespostas} opções.`)
-        return false
+        return `Por favor, selecione no máximo ${maxRespostas} opções.`
       }
     }
 
-    return true
+    return ''
+  }
+
+  const validarResposta = (): boolean => {
+    if (!perguntaAtual) return true
+    const erro = validarUmaResposta(perguntaAtual, valorAtual)
+    setValidacaoErro(erro)
+    return !erro
+  }
+
+  const validarRespostaBloco = (): boolean => {
+    const novosErros: Record<string, string> = {}
+    let temErro = false
+
+    blockPerguntas.forEach(sub => {
+      const val = valorAtual[sub.id]
+      const erro = validarUmaResposta(sub, val)
+      if (erro) {
+        novosErros[sub.id] = erro
+        temErro = true
+      }
+    })
+
+    setErrosCampos(novosErros)
+    return !temErro
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent, index: number, total: number) => {
+    if (e.key === 'Enter') {
+      if (index < total - 1) {
+        e.preventDefault()
+        const form = e.currentTarget.closest('form')
+        if (form) {
+          const elements = Array.from(form.querySelectorAll('input, select, textarea, button[type="button"]'))
+          const currentIdx = elements.indexOf(e.currentTarget)
+          if (currentIdx !== -1 && currentIdx + 1 < elements.length) {
+            (elements[currentIdx + 1] as HTMLElement).focus()
+          }
+        }
+      }
+    }
+  }
+
+  // --- REUSABLE FIELD INPUT RENDERING ---
+  const renderCampoInput = (
+    perg: any,
+    val: any,
+    setVal: (v: any) => void,
+    erro: string | undefined,
+    onKeyDown?: (e: React.KeyboardEvent<any>) => void
+  ) => {
+    const applyWhatsappMask = (v: string) => {
+      const numbers = v.replace(/\D/g, '')
+      if (numbers.length <= 2) return numbers
+      if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`
+      if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`
+      return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`
+    }
+
+    const applyCpfMask = (v: string) => {
+      const n = v.replace(/\D/g, '').slice(0, 11)
+      if (n.length <= 3) return n
+      if (n.length <= 6) return `${n.slice(0, 3)}.${n.slice(3)}`
+      if (n.length <= 9) return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6)}`
+      return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`
+    }
+
+    const applyCepMask = (v: string) => {
+      const n = v.replace(/\D/g, '').slice(0, 8)
+      if (n.length <= 5) return n
+      return `${n.slice(0, 5)}-${n.slice(5)}`
+    }
+
+    const handleToggleOpcao = (opcaoId: string) => {
+      const selecionadas = Array.isArray(val) ? [...val] : []
+      const maxRespostas = perg.config?.max_respostas
+
+      if (selecionadas.includes(opcaoId)) {
+        setVal(selecionadas.filter(id => id !== opcaoId))
+      } else {
+        if (maxRespostas === 1) {
+          setVal([opcaoId])
+        } else if (maxRespostas && selecionadas.length >= maxRespostas) {
+          // sem ação
+        } else {
+          setVal([...selecionadas, opcaoId])
+        }
+      }
+    }
+
+    return (
+      <div className="space-y-1.5 w-full">
+        {perg.tipo === 'texto_curto' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Escreva sua resposta..."
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'textarea' && (
+          <textarea
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                if (onKeyDown) {
+                  onKeyDown(e)
+                } else {
+                  e.preventDefault()
+                  handleAvancar()
+                }
+              }
+            }}
+            placeholder="Escreva sua resposta com detalhes..."
+            rows={4}
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base resize-none leading-relaxed shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'email' && (
+          <input
+            type="email"
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="nome@provedor.com"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'whatsapp' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(applyWhatsappMask(e.target.value))}
+            onKeyDown={onKeyDown}
+            placeholder="(00) 00000-0000"
+            maxLength={15}
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'cpf' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(applyCpfMask(e.target.value))}
+            onKeyDown={onKeyDown}
+            placeholder="000.000.000-00"
+            maxLength={14}
+            inputMode="numeric"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'cep' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(applyCepMask(e.target.value))}
+            onKeyDown={onKeyDown}
+            placeholder="00000-000"
+            maxLength={9}
+            inputMode="numeric"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'estado' && (
+          <select
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm appearance-none"
+          >
+            <option value="">Selecione o Estado (UF)...</option>
+            {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map(uf => (
+              <option key={uf} value={uf}>{uf}</option>
+            ))}
+          </select>
+        )}
+
+        {perg.tipo === 'cidade' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Informe a cidade ou município..."
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'bairro' && (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Informe o bairro..."
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+          />
+        )}
+
+        {perg.tipo === 'logradouro' && (() => {
+          const parseLogradouro = (vStr: string) => {
+            const tiposLogradouro = ['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro']
+            const match = tiposLogradouro.find(t => vStr.startsWith(t + ' '))
+            if (match) {
+              return { tipo: match, nome: vStr.slice(match.length + 1) }
+            }
+            return { tipo: 'Rua', nome: vStr }
+          }
+          const info = parseLogradouro(val as string || '')
+          return (
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <select
+                value={info.tipo}
+                onChange={(e) => setVal(e.target.value + ' ' + info.nome)}
+                onKeyDown={onKeyDown}
+                className="w-full sm:w-1/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm animate-fade-in"
+              >
+                {['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={info.nome}
+                onChange={(e) => setVal(info.tipo + ' ' + e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Nome do logradouro..."
+                className="w-full sm:w-2/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+              />
+            </div>
+          )
+        })()}
+
+        {perg.tipo === 'numero' && (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Digite um número..."
+            inputMode="numeric"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        )}
+
+        {perg.tipo === 'avaliacao' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-11 gap-1.5">
+              {Array.from({ length: 11 }, (_, i) => i).map((nota) => {
+                const selecionada = val === nota || val === String(nota)
+                const cor =
+                  nota <= 6
+                    ? selecionada
+                      ? 'bg-red-500 border-red-500 text-white shadow-red-500/30 shadow-md'
+                      : 'border-red-200 text-red-400 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40'
+                    : nota <= 8
+                    ? selecionada
+                      ? 'bg-amber-500 border-amber-500 text-white shadow-amber-500/30 shadow-md'
+                      : 'border-amber-200 text-amber-500 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/40'
+                    : selecionada
+                    ? 'bg-emerald-500 border-emerald-500 text-white shadow-emerald-500/30 shadow-md'
+                    : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40'
+                return (
+                  <button
+                    key={nota}
+                    type="button"
+                    onClick={() => setVal(nota)}
+                    onKeyDown={onKeyDown}
+                    className={`aspect-square rounded-xl border-2 font-bold text-sm transition-all duration-150 active:scale-90 cursor-pointer ${cor}`}
+                  >
+                    {nota}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {perg.tipo === 'multipla' && (
+          <div className="space-y-2.5">
+            {(perg.config?.opcoes || []).map((opcao: any) => {
+              const isSelected = Array.isArray(val) && val.includes(opcao.id)
+              return (
+                <button
+                  key={opcao.id}
+                  type="button"
+                  onClick={() => handleToggleOpcao(opcao.id)}
+                  onKeyDown={onKeyDown}
+                  className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
+                    isSelected
+                      ? 'bg-primary/10 border-primary text-foreground font-semibold'
+                      : 'bg-card border-border text-muted-foreground hover:border-primary/20 hover:bg-muted/50'
+                  }`}
+                >
+                  <span className="font-semibold text-base">{opcao.texto}</span>
+                  <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                    isSelected ? 'border-primary bg-primary' : 'border-border'
+                  }`}>
+                    {isSelected && <div className="h-2 w-2 rounded-full bg-primary-foreground animate-scale-up"></div>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {erro && (
+          <p className="text-destructive text-sm font-semibold flex items-center gap-1.5 animate-pulse mt-1">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {erro}
+          </p>
+        )}
+      </div>
+    )
   }
 
   // --- SUBFLUXOS E SESSÕES ---
@@ -470,19 +747,23 @@ export const Responder: React.FC = () => {
 
   // --- AVANÇO DE FLUXO ---
   const handleAvancar = async () => {
-    if (!validarResposta() || !pesquisa || !flowData) return
+    if (isBlock) {
+      if (!validarRespostaBloco() || !pesquisa || !flowData) return
+    } else {
+      if (!validarResposta() || !pesquisa || !flowData) return
+    }
 
     // 1. Salva a resposta atual no estado acumulador
     const novasRespostas = {
       ...respostasAcumuladas,
-      [currentNodeId]: valorAtual
+      ...(isBlock ? valorAtual : { [currentNodeId]: valorAtual })
     }
     setRespostasAcumuladas(novasRespostas)
 
     const edges = flowData.edges || []
     let proximoNoId = 'end'
 
-    if (perguntaAtual?.tipo === 'multipla') {
+    if (!isBlock && perguntaAtual?.tipo === 'multipla') {
       // Lógica de avanço condicional para múltipla escolha
       const selecionadas = valorAtual as string[]
       
@@ -515,14 +796,14 @@ export const Responder: React.FC = () => {
         }
       }
     } else {
-      // Avanço sequencial simples para outros tipos
+      // Avanço sequencial simples para outros tipos e blocos
       const arestaPadrao = edges.find((e: any) => e.source === currentNodeId)
       if (arestaPadrao) {
         proximoNoId = arestaPadrao.target
       }
     }
 
-    // 2. Verifica se o próximo nó é subfluxo ou fim ou outra pergunta
+    // 2. Verifica se o próximo nó é subfluxo ou fim ou outra pergunta/bloco
     const proximoNo = flowData.nodes?.find((n: any) => n.id === proximoNoId)
 
     if (proximoNo && proximoNo.type === 'subflow') {
@@ -697,7 +978,7 @@ export const Responder: React.FC = () => {
 
       {/* Pergunta Container */}
       <main className="flex-1 flex items-center justify-center p-6 max-w-md mx-auto w-full">
-        {perguntaAtual && (
+        {(perguntaAtual || isBlock) && (
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -705,12 +986,12 @@ export const Responder: React.FC = () => {
             }}
             className="w-full space-y-8 animate-slide-in"
           >
-            {/* Título pergunta */}
+            {/* Título pergunta/bloco */}
             <div className="space-y-3">
               <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
-                {perguntaAtual.titulo}
+                {isBlock ? currentNode.data.titulo : perguntaAtual?.titulo}
               </h2>
-              {perguntaAtual.obrigatoria && (
+              {(!isBlock && perguntaAtual?.obrigatoria) && (
                 <span className="inline-block text-[9px] bg-destructive/10 border border-destructive/20 text-destructive px-2 py-0.5 rounded-full font-bold">
                   Obrigatório
                 </span>
@@ -718,275 +999,36 @@ export const Responder: React.FC = () => {
             </div>
 
             {/* Input dependendo do tipo de pergunta */}
-            <div className="space-y-4">
-              {/* 1. Texto Curto */}
-              {perguntaAtual.tipo === 'texto_curto' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="Escreva sua resposta..."
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 2. Textarea */}
-              {perguntaAtual.tipo === 'textarea' && (
-                <textarea
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleAvancar()
-                    }
-                  }}
-                  placeholder="Escreva sua resposta com detalhes..."
-                  rows={5}
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base resize-none leading-relaxed shadow-sm"
-                />
-              )}
-
-              {/* 3. E-mail */}
-              {perguntaAtual.tipo === 'email' && (
-                <input
-                  type="email"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="nome@provedor.com"
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 4. WhatsApp / Celular */}
-              {perguntaAtual.tipo === 'whatsapp' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    const masked = applyWhatsappMask(e.target.value)
-                    setValorAtual(masked)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="(00) 00000-0000"
-                  maxLength={15}
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 5. CPF */}
-              {perguntaAtual.tipo === 'cpf' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    const masked = applyCpfMask(e.target.value)
-                    setValorAtual(masked)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="000.000.000-00"
-                  maxLength={14}
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 6. CEP */}
-              {perguntaAtual.tipo === 'cep' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    const masked = applyCepMask(e.target.value)
-                    setValorAtual(masked)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="00000-000"
-                  maxLength={9}
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 7. Estado (UF) */}
-              {perguntaAtual.tipo === 'estado' && (
-                <select
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm appearance-none"
-                >
-                  <option value="">Selecione o Estado (UF)...</option>
-                  {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map(uf => (
-                    <option key={uf} value={uf}>{uf}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* 8. Cidade */}
-              {perguntaAtual.tipo === 'cidade' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="Informe a cidade ou município..."
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 9. Bairro */}
-              {perguntaAtual.tipo === 'bairro' && (
-                <input
-                  type="text"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="Informe o bairro..."
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                />
-              )}
-
-              {/* 10. Logradouro com select do tipo */}
-              {perguntaAtual.tipo === 'logradouro' && (() => {
-                const parseLogradouro = (val: string) => {
-                  const tiposLogradouro = ['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro']
-                  const match = tiposLogradouro.find(t => val.startsWith(t + ' '))
-                  if (match) {
-                    return { tipo: match, nome: val.slice(match.length + 1) }
-                  }
-                  return { tipo: 'Rua', nome: val }
-                }
-                const info = parseLogradouro(valorAtual as string || '')
-                return (
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                      value={info.tipo}
-                      onChange={(e) => {
-                        const novoTipo = e.target.value
-                        setValorAtual(novoTipo + ' ' + info.nome)
-                        setValidacaoErro('')
-                      }}
-                      className="w-full sm:w-1/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                    >
-                      {['Rua', 'Avenida', 'Praça', 'Travessa', 'Alameda', 'Rodovia', 'Outro'].map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={info.nome}
-                      onChange={(e) => {
-                        const novoNome = e.target.value
-                        setValorAtual(info.tipo + ' ' + novoNome)
-                        setValidacaoErro('')
-                      }}
-                      placeholder="Nome do logradouro (ex: Paulista, das Flores...)"
-                      className="w-full sm:w-2/3 rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-                    />
+            <div className="space-y-5">
+              {isBlock ? (
+                blockPerguntas.map((sub, idx) => (
+                  <div key={sub.id} className="space-y-2">
+                    <label className="block text-sm font-bold text-foreground">
+                      {sub.titulo}
+                      {sub.obrigatoria && <span className="text-red-500 ml-1 font-extrabold">*</span>}
+                    </label>
+                    {renderCampoInput(
+                      sub,
+                      valorAtual[sub.id],
+                      (newVal) => {
+                        setValorAtual((prev: any) => ({ ...prev, [sub.id]: newVal }))
+                        setErrosCampos((prev: any) => ({ ...prev, [sub.id]: '' }))
+                      },
+                      errosCampos[sub.id],
+                      (e) => handleInputKeyDown(e, idx, blockPerguntas.length)
+                    )}
                   </div>
+                ))
+              ) : (
+                renderCampoInput(
+                  perguntaAtual,
+                  valorAtual,
+                  (newVal) => {
+                    setValorAtual(newVal)
+                    setValidacaoErro('')
+                  },
+                  validacaoErro
                 )
-              })()}
-
-              {/* 11. Número */}
-              {perguntaAtual.tipo === 'numero' && (
-                <input
-                  type="number"
-                  value={valorAtual || ''}
-                  onChange={(e) => {
-                    setValorAtual(e.target.value)
-                    setValidacaoErro('')
-                  }}
-                  placeholder="Digite um número..."
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              )}
-
-              {/* 12. Avaliação 0-10 */}
-              {perguntaAtual.tipo === 'avaliacao' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-11 gap-1.5">
-                    {Array.from({ length: 11 }, (_, i) => i).map((nota) => {
-                      const selecionada = valorAtual === nota || valorAtual === String(nota)
-                      const cor =
-                        nota <= 6
-                          ? selecionada
-                            ? 'bg-red-500 border-red-500 text-white shadow-red-500/30 shadow-md'
-                            : 'border-red-200 text-red-400 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40'
-                          : nota <= 8
-                          ? selecionada
-                            ? 'bg-amber-500 border-amber-500 text-white shadow-amber-500/30 shadow-md'
-                            : 'border-amber-200 text-amber-500 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/40'
-                          : selecionada
-                          ? 'bg-emerald-500 border-emerald-500 text-white shadow-emerald-500/30 shadow-md'
-                          : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40'
-                      return (
-                        <button
-                          key={nota}
-                          type="button"
-                          onClick={() => { setValorAtual(nota); setValidacaoErro('') }}
-                          className={`aspect-square rounded-xl border-2 font-bold text-sm transition-all duration-150 active:scale-90 cursor-pointer ${cor}`}
-                        >
-                          {nota}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div className="flex justify-between text-[10px] font-semibold text-muted-foreground px-0.5">
-                    <span>😟 Muito insatisfeito</span>
-                    <span>Muito satisfeito 😄</span>
-                  </div>
-                  {(valorAtual !== '' && valorAtual !== null && valorAtual !== undefined) && (
-                    <div className="text-center py-2 rounded-2xl bg-card border border-border">
-                      <span className="text-4xl font-extrabold text-foreground">{valorAtual}</span>
-                      <span className="text-muted-foreground text-lg"> / 10</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 13. Múltipla Escolha */}
-              {perguntaAtual.tipo === 'multipla' && (
-                <div className="space-y-2.5">
-                  {(perguntaAtual.config?.opcoes || []).map((opcao) => {
-                    const isSelected = Array.isArray(valorAtual) && valorAtual.includes(opcao.id)
-                    return (
-                      <button
-                        key={opcao.id}
-                        type="button"
-                        onClick={() => handleToggleOpcao(opcao.id)}
-                        className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
-                          isSelected
-                            ? 'bg-primary/10 border-primary text-foreground font-semibold'
-                            : 'bg-card border-border text-muted-foreground hover:border-primary/20 hover:bg-muted/50'
-                        }`}
-                      >
-                        <span className="font-semibold text-base">{opcao.texto}</span>
-                        <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-primary bg-primary' : 'border-border'
-                        }`}>
-                          {isSelected && <div className="h-2 w-2 rounded-full bg-primary-foreground animate-scale-up"></div>}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
               )}
             </div>
 
