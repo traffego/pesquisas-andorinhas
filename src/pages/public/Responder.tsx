@@ -43,6 +43,7 @@ export const Responder: React.FC = () => {
   // Resposta da tela atual
   const [valorAtual, setValorAtual] = useState<any>('')
   const [validacaoErro, setValidacaoErro] = useState('')
+  const [blockPerguntas, setBlockPerguntas] = useState<Pergunta[]>([])
 
   // Objeto e Líder Relacionados
   const [objetoRelacionado, setObjetoRelacionado] = useState<Objeto | null>(null)
@@ -220,7 +221,17 @@ export const Responder: React.FC = () => {
 
   const currentNode = flowData?.nodes?.find((n: any) => n.id === currentNodeId)
   const isBlock = currentNode?.type === 'block'
-  const blockPerguntas = isBlock ? (currentNode.data.perguntas || []) as any[] : []
+
+  // Carrega perguntas do bloco quando nó muda
+  useEffect(() => {
+    if (isBlock && currentNode?.data?.subflowId) {
+      dbService.getPerguntas(currentNode.data.subflowId)
+        .then(setBlockPerguntas)
+        .catch(console.error)
+    } else if (!isBlock) {
+      setBlockPerguntas([])
+    }
+  }, [currentNodeId, isBlock, currentNode?.data?.subflowId])
 
   // Limpa o valor de entrada quando muda o nó da pergunta ou bloco
   useEffect(() => {
@@ -238,7 +249,7 @@ export const Responder: React.FC = () => {
       setValorAtual(anterior !== undefined ? anterior : (perguntaAtual.tipo === 'multipla' ? [] : ''))
       setValidacaoErro('')
     }
-  }, [currentNodeId, perguntaAtual, isBlock, flowData])
+  }, [currentNodeId, perguntaAtual, isBlock, flowData, blockPerguntas])
 
   // --- VALIDAÇÕES DE TELA ---
   const validarUmaResposta = (perg: any, valor: any): string => {
@@ -989,7 +1000,7 @@ export const Responder: React.FC = () => {
             {/* Título pergunta/bloco */}
             <div className="space-y-3">
               <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
-                {isBlock ? currentNode.data.titulo : perguntaAtual?.titulo}
+                {isBlock ? (currentNode.data.subflowTitulo || currentNode.data.titulo || 'Bloco') : perguntaAtual?.titulo}
               </h2>
               {(!isBlock && perguntaAtual?.obrigatoria) && (
                 <span className="inline-block text-[9px] bg-destructive/10 border border-destructive/20 text-destructive px-2 py-0.5 rounded-full font-bold">

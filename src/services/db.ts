@@ -55,6 +55,7 @@ export interface Fluxo {
   nome: string
   descricao: string | null
   flow_data: any
+  tipo?: 'fluxo' | 'bloco'
   user_id?: string
   created_at?: string
 }

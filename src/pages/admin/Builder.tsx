@@ -31,10 +31,7 @@ import {
   Sparkles,
   Layers,
   Eye,
-  LayoutGrid,
-  ArrowUp,
-  ArrowDown,
-  Edit2
+  LayoutGrid
 } from 'lucide-react'
 
 const nodeTypes = {
@@ -86,12 +83,10 @@ export const Builder: React.FC = () => {
   const [editingSubflowNodeId, setEditingSubflowNodeId] = useState<string | null>(null)
   const [selectedSubflowId, setSelectedSubflowId] = useState<string>('')
 
-  // Estados do Bloco
+  // Estados do Bloco (seleção global)
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
   const [editingBlockNodeId, setEditingBlockNodeId] = useState<string | null>(null)
-  const [bTitulo, setBTitulo] = useState('')
-  const [bPerguntas, setBPerguntas] = useState<any[]>([])
-  const [addingQuestionToBlock, setAddingQuestionToBlock] = useState(false)
+  const [selectedBlockId, setSelectedBlockId] = useState<string>('')
 
   const loadFluxosDisponiveis = async () => {
     try {
@@ -288,8 +283,7 @@ export const Builder: React.FC = () => {
 
   const handleOpenAddBlock = () => {
     setEditingBlockNodeId(null)
-    setBTitulo('')
-    setBPerguntas([])
+    setSelectedBlockId('')
     setIsBlockModalOpen(true)
   }
 
@@ -298,8 +292,7 @@ export const Builder: React.FC = () => {
       const node = nds.find(n => n.id === nodeId)
       if (node) {
         setEditingBlockNodeId(nodeId)
-        setBTitulo(node.data.titulo as string || '')
-        setBPerguntas(node.data.perguntas as any[] || [])
+        setSelectedBlockId(node.data.subflowId as string || '')
         setIsBlockModalOpen(true)
       }
       return nds
@@ -314,7 +307,10 @@ export const Builder: React.FC = () => {
 
   const handleSaveBlock = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!bTitulo.trim()) return
+    if (!selectedBlockId) return
+
+    const blockFluxo = fluxosDisponiveis.find(f => f.id === selectedBlockId)
+    const subflowTitulo = blockFluxo ? blockFluxo.nome : 'Bloco Desconhecido'
 
     if (editingBlockNodeId) {
       setNodes((nds) =>
@@ -324,8 +320,8 @@ export const Builder: React.FC = () => {
               ...n,
               data: {
                 ...n.data,
-                titulo: bTitulo.trim(),
-                perguntas: bPerguntas
+                subflowId: selectedBlockId,
+                subflowTitulo
               }
             }
           }
@@ -340,8 +336,8 @@ export const Builder: React.FC = () => {
         position: { x: 250, y: 350 },
         data: {
           id: newId,
-          titulo: bTitulo.trim(),
-          perguntas: bPerguntas,
+          subflowId: selectedBlockId,
+          subflowTitulo,
           onEdit: handleOpenEditBlock,
           onDelete: handleDeleteBlockNode
         }
@@ -350,48 +346,6 @@ export const Builder: React.FC = () => {
     }
 
     setIsBlockModalOpen(false)
-  }
-
-  // Ações de campos internos ao Bloco
-  const handleAddQuestionToBlock = () => {
-    setEditingQuestionId(null)
-    setQTitulo('')
-    setQTipo('texto_curto')
-    setQObrigatoria(true)
-    setQOpcoes([])
-    setNewOpcaoTexto('')
-    setQMaxRespostas('1')
-    setQCategoriaId('')
-    setAddingQuestionToBlock(true)
-    setIsQuestionModalOpen(true)
-  }
-
-  const handleEditQuestionInBlock = (q: any) => {
-    setEditingQuestionId(q.id)
-    setQTitulo(q.titulo)
-    setQTipo(q.tipo)
-    setQObrigatoria(q.obrigatoria)
-    setQOpcoes(q.config?.opcoes || [])
-    setNewOpcaoTexto('')
-    const maxR = q.config?.max_respostas
-    setQMaxRespostas(maxR ? String(maxR) : 'livre')
-    setQCategoriaId(q.categoria_id || '')
-    setAddingQuestionToBlock(true)
-    setIsQuestionModalOpen(true)
-  }
-
-  const handleDeleteQuestionInBlock = (qId: string) => {
-    setBPerguntas(prev => prev.filter(q => q.id !== qId))
-  }
-
-  const handleMoveQuestionInBlock = (index: number, direction: 'up' | 'down') => {
-    const nextIndex = direction === 'up' ? index - 1 : index + 1
-    if (nextIndex < 0 || nextIndex >= bPerguntas.length) return
-    const list = [...bPerguntas]
-    const temp = list[index]
-    list[index] = list[nextIndex]
-    list[nextIndex] = temp
-    setBPerguntas(list)
   }
 
   const handleAddOpcao = () => {
@@ -422,17 +376,6 @@ export const Builder: React.FC = () => {
         min_respostas: qTipo === 'multipla' ? 1 : undefined,
         max_respostas: maxRespostasVal
       }
-    }
-
-    if (addingQuestionToBlock) {
-      if (editingQuestionId) {
-        setBPerguntas(prev => prev.map(q => q.id === editingQuestionId ? qData : q))
-      } else {
-        setBPerguntas(prev => [...prev, qData])
-      }
-      setIsQuestionModalOpen(false)
-      setAddingQuestionToBlock(false)
-      return
     }
 
     if (editingQuestionId) {
@@ -640,19 +583,7 @@ export const Builder: React.FC = () => {
             config: node.data.config as any
           })
         } else if (node.type === 'block') {
-          const subPergs = (node.data.perguntas || []) as any[]
-          subPergs.forEach(sub => {
-            perguntas.push({
-              id: sub.id,
-              fluxo_id: fluxo.id,
-              tipo: sub.tipo,
-              titulo: sub.titulo,
-              obrigatoria: sub.obrigatoria,
-              ordem: ordem++,
-              categoria_id: sub.categoria_id || null,
-              config: sub.config || {}
-            })
-          })
+          // Blocos reutilizáveis são fluxos independentes; não sincronizar aqui
         }
       })
 
@@ -1089,111 +1020,45 @@ export const Builder: React.FC = () => {
       {/* MODAL 4: ADICIONAR / EDITAR BLOCO */}
       {isBlockModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up max-h-[85vh] overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-scale-up">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-5">
               <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
                 <LayoutGrid className="h-5 w-5 text-sky-400" />
-                {editingBlockNodeId ? 'Editar Bloco' : 'Criar Bloco de Campos'}
+                {editingBlockNodeId ? 'Editar Bloco' : 'Adicionar Bloco Reutilizável'}
               </h3>
               <button
                 type="button"
-                onClick={() => { setIsBlockModalOpen(false); setAddingQuestionToBlock(false) }}
+                onClick={() => setIsBlockModalOpen(false)}
                 className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveBlock} className="space-y-5">
+            <form onSubmit={handleSaveBlock} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                  Título do Bloco (Ex: Endereço, Dados Pessoais)
+                  Selecionar Bloco Reutilizável
                 </label>
-                <input
-                  type="text"
+                <select
                   required
-                  value={bTitulo}
-                  onChange={(e) => setBTitulo(e.target.value)}
-                  placeholder="Ex: Endereço"
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-100 placeholder-zinc-650 focus:border-primary focus:outline-none transition-colors text-sm"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center border-b border-zinc-800/80 pb-2">
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                    Campos do Bloco
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAddQuestionToBlock}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Adicionar Campo
-                  </button>
-                </div>
-
-                {bPerguntas.length === 0 ? (
-                  <p className="text-xs text-zinc-500 italic text-center py-6">
-                    Nenhum campo adicionado. Clique em "Adicionar Campo" acima.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                    {bPerguntas.map((q, idx) => (
-                      <div key={q.id} className="flex justify-between items-center bg-zinc-950/60 p-3 rounded-xl border border-zinc-850 hover:border-zinc-800 transition-all gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] bg-sky-950/50 border border-sky-900/30 text-sky-400 px-1.5 py-0.2 rounded font-bold uppercase">
-                              {q.tipo}
-                            </span>
-                            {q.obrigatoria && (
-                              <span className="text-[9px] text-red-400 font-bold">* obrigatório</span>
-                            )}
-                          </div>
-                          <p className="text-sm font-semibold text-zinc-200 truncate mt-1">{q.titulo}</p>
-                        </div>
-
-                        {/* Ações do campo */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            disabled={idx === 0}
-                            onClick={() => handleMoveQuestionInBlock(idx, 'up')}
-                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 disabled:opacity-30 disabled:hover:bg-zinc-900 cursor-pointer"
-                            title="Mover para cima"
-                          >
-                            <ArrowUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={idx === bPerguntas.length - 1}
-                            onClick={() => handleMoveQuestionInBlock(idx, 'down')}
-                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 disabled:opacity-30 disabled:hover:bg-zinc-900 cursor-pointer"
-                            title="Mover para baixo"
-                          >
-                            <ArrowDown className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEditQuestionInBlock(q)}
-                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
-                            title="Editar campo"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteQuestionInBlock(q.id)}
-                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-red-950/25 text-zinc-400 hover:text-red-400 cursor-pointer"
-                            title="Remover campo"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                  value={selectedBlockId}
+                  onChange={(e) => setSelectedBlockId(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-zinc-200 focus:border-sky-500 focus:outline-none transition-colors text-sm"
+                >
+                  <option value="" disabled>Escolha um bloco...</option>
+                  {fluxosDisponiveis
+                    .filter((f) => f.tipo === 'bloco')
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.nome}
+                      </option>
                     ))}
-                  </div>
+                </select>
+                {fluxosDisponiveis.filter(f => f.tipo === 'bloco').length === 0 && (
+                  <p className="text-xs text-amber-400 mt-2">
+                    Nenhum bloco criado ainda. Crie blocos na aba "Blocos Reutilizáveis" em Fluxos.
+                  </p>
                 )}
               </div>
 
@@ -1207,9 +1072,9 @@ export const Builder: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-hover rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-lg shadow-sky-500/20 transition-all cursor-pointer"
                 >
-                  {editingBlockNodeId ? 'Salvar Alterações' : 'Criar Bloco'}
+                  {editingBlockNodeId ? 'Salvar Alterações' : 'Adicionar Bloco'}
                 </button>
               </div>
             </form>
