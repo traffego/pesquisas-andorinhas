@@ -6,7 +6,6 @@ import {
   Users2, 
   ClipboardList, 
   ArrowUpRight, 
-  Sparkles,
   CheckCircle,
   XCircle,
   FilePlus,
@@ -59,10 +58,6 @@ export const Dashboard: React.FC = () => {
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-card to-card/60 p-8 shadow-xl">
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 h-64 w-64 rounded-full bg-primary/5 blur-3xl"></div>
         <div className="relative z-10 max-w-2xl">
-          <div className="flex items-center gap-2 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
-            <Sparkles className="h-4 w-4" />
-            <span>Fluxo Condicional Inteligente</span>
-          </div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight mb-2">
             Olá, seja bem-vindo ao Andorinha
           </h1>
