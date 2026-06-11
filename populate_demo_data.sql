@@ -136,12 +136,12 @@ BEGIN
           jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
         ),
         'edges', jsonb_build_array(
-          jsonb_build_object('id', 'e-start-' || v_perg1_1, 'source', 'start', 'target', v_perg1_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg1_1 || '-' || v_perg1_2, 'source', v_perg1_1, 'target', v_perg1_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg1_2 || '-' || v_perg1_sexo, 'source', v_perg1_2, 'target', v_perg1_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg1_sexo || '-' || v_perg1_idade, 'source', v_perg1_sexo, 'target', v_perg1_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg1_idade || '-' || v_perg1_local, 'source', v_perg1_idade, 'target', v_perg1_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg1_local || '-end', 'source', v_perg1_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+          jsonb_build_object('id', 'e-start-' || v_perg1_1::text, 'source', 'start', 'target', v_perg1_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_1::text || '-' || v_perg1_2::text, 'source', v_perg1_1, 'target', v_perg1_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_2::text || '-' || v_perg1_sexo::text, 'source', v_perg1_2, 'target', v_perg1_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_sexo::text || '-' || v_perg1_idade::text, 'source', v_perg1_sexo, 'target', v_perg1_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_idade::text || '-' || v_perg1_local::text, 'source', v_perg1_idade, 'target', v_perg1_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_local::text || '-end', 'source', v_perg1_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
         )
       ), 
       'fluxo', 
@@ -162,12 +162,12 @@ BEGIN
           jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
         ),
         'edges', jsonb_build_array(
-          jsonb_build_object('id', 'e-start-' || v_perg2_1, 'source', 'start', 'target', v_perg2_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg2_1 || '-' || v_perg2_2, 'source', v_perg2_1, 'target', v_perg2_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg2_2 || '-' || v_perg2_sexo, 'source', v_perg2_2, 'target', v_perg2_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg2_sexo || '-' || v_perg2_idade, 'source', v_perg2_sexo, 'target', v_perg2_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg2_idade || '-' || v_perg2_local, 'source', v_perg2_idade, 'target', v_perg2_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg2_local || '-end', 'source', v_perg2_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+          jsonb_build_object('id', 'e-start-' || v_perg2_1::text, 'source', 'start', 'target', v_perg2_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_1::text || '-' || v_perg2_2::text, 'source', v_perg2_1, 'target', v_perg2_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_2::text || '-' || v_perg2_sexo::text, 'source', v_perg2_2, 'target', v_perg2_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_sexo::text || '-' || v_perg2_idade::text, 'source', v_perg2_sexo, 'target', v_perg2_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_idade::text || '-' || v_perg2_local::text, 'source', v_perg2_idade, 'target', v_perg2_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_local::text || '-end', 'source', v_perg2_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
         )
       ),
       'fluxo', 
@@ -188,17 +188,18 @@ BEGIN
           jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
         ),
         'edges', jsonb_build_array(
-          jsonb_build_object('id', 'e-start-' || v_perg3_1, 'source', 'start', 'target', v_perg3_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg3_1 || '-' || v_perg3_2, 'source', v_perg3_1, 'target', v_perg3_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg3_2 || '-' || v_perg3_sexo, 'source', v_perg3_2, 'target', v_perg3_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg3_sexo || '-' || v_perg3_idade, 'source', v_perg3_sexo, 'target', v_perg3_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg3_idade || '-' || v_perg3_local, 'source', v_perg3_idade, 'target', v_perg3_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
-          jsonb_build_object('id', 'e-' || v_perg3_local || '-end', 'source', v_perg3_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+          jsonb_build_object('id', 'e-start-' || v_perg3_1::text, 'source', 'start', 'target', v_perg3_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_1::text || '-' || v_perg3_2::text, 'source', v_perg3_1, 'target', v_perg3_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_2::text || '-' || v_perg3_sexo::text, 'source', v_perg3_2, 'target', v_perg3_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_sexo::text || '-' || v_perg3_idade::text, 'source', v_perg3_sexo, 'target', v_perg3_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_idade::text || '-' || v_perg3_local::text, 'source', v_perg3_idade, 'target', v_perg3_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_local::text || '-end', 'source', v_perg3_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
         )
       ),
       'fluxo', 
       v_user_id
-    );
+    )
+  );
 
   -- 6. Inserir Perguntas para cada Fluxo (incluindo demográficos categorizados)
   -- Fluxo 1 (Satisfação)
