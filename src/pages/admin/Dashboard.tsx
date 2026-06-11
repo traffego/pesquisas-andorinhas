@@ -21,12 +21,32 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell,
-  BarChart,
-  Bar
+  Cell
 } from 'recharts'
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e']
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/95 backdrop-blur-md border border-border p-3.5 rounded-xl shadow-xl space-y-2 min-w-[150px]">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
+        <div className="space-y-1.5">
+          {payload.map((pld: any, idx: number) => (
+            <div key={idx} className="flex items-center justify-between gap-4 text-xs font-semibold">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: pld.stroke || pld.color }} />
+                <span>{pld.name}</span>
+              </div>
+              <span className="font-extrabold text-foreground">{pld.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  return null
+}
 
 export const Dashboard: React.FC = () => {
   const [objetos, setObjetos] = useState<Objeto[]>([])
@@ -66,26 +86,33 @@ export const Dashboard: React.FC = () => {
     loadData()
   }, [])
 
-  // 1. Respostas por dia filtrado por período
+  // 1. Respostas por dia filtrado por período (Total vs Únicos)
   const respostasPorDia = useMemo(() => {
     const dias = periodo === '7d' ? 7 : 30
-    const map: Record<string, number> = {}
+    const map: Record<string, { total: number; fingerprints: Set<string> }> = {}
     for (let i = dias - 1; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
       const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-      map[key] = 0
+      map[key] = { total: 0, fingerprints: new Set() }
     }
     
     respostas.forEach(r => {
       if (!r.created_at) return
       const key = new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
       if (map[key] !== undefined) {
-        map[key]++
+        map[key].total++
+        if (r.fingerprint) {
+          map[key].fingerprints.add(r.fingerprint)
+        }
       }
     })
     
-    return Object.entries(map).map(([data, total]) => ({ data, total }))
+    return Object.entries(map).map(([data, val]) => ({ 
+      data, 
+      total: val.total, 
+      unicos: val.fingerprints.size 
+    }))
   }, [respostas, periodo])
 
   // 2. Respostas por Pesquisa (Top 5)
@@ -127,6 +154,12 @@ export const Dashboard: React.FC = () => {
       .slice(0, 5)
   }, [respostas])
 
+  // Total de participantes únicos
+  const totalUnicos = useMemo(() => {
+    const set = new Set(respostas.map(r => r.fingerprint).filter(Boolean))
+    return set.size
+  }, [respostas])
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -144,7 +177,7 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Painel Geral</h1>
-          <p className="text-xs text-muted-foreground">Estatísticas e monitoramento em tempo real</p>
+          <p className="text-xs text-muted-foreground">Mapeamento e análise em tempo real</p>
         </div>
         <Link
           to="/admin/pesquisas"
@@ -161,8 +194,8 @@ export const Dashboard: React.FC = () => {
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 space-y-6 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
             <div>
-              <h3 className="font-bold text-foreground">Volume de Respostas</h3>
-              <p className="text-xs text-muted-foreground">Envio diário no período selecionado</p>
+              <h3 className="font-bold text-foreground">Engajamento de Respostas</h3>
+              <p className="text-xs text-muted-foreground">Volume de envios versus participantes únicos</p>
             </div>
             <div className="flex bg-muted p-1 rounded-xl gap-1 self-start sm:self-auto">
               <button
@@ -188,9 +221,16 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold tracking-tight text-foreground">{respostas.length}</span>
-            <span className="text-xs text-muted-foreground font-medium">respostas coletadas no total</span>
+          <div className="flex items-center gap-8">
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total de Envios</p>
+              <p className="text-3xl font-extrabold tracking-tight text-foreground">{respostas.length}</p>
+            </div>
+            <div className="w-[1px] h-8 bg-border" />
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dispositivos Únicos</p>
+              <p className="text-3xl font-extrabold tracking-tight text-primary">{totalUnicos}</p>
+            </div>
           </div>
 
           <div className="h-[280px] w-full pt-2">
@@ -203,9 +243,13 @@ export const Dashboard: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={respostasPorDia} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="colorRespostas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.25}/>
+                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
                       <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorUnicos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
@@ -221,21 +265,24 @@ export const Dashboard: React.FC = () => {
                     tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
                     allowDecimals={false}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? 'hsl(var(--card))' : '#ffffff',
-                      borderColor: 'hsl(var(--border))',
-                      borderRadius: '0.75rem',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                  />
+                  <Tooltip content={<CustomTooltip />} />
                   <Area 
+                    name="Envios Totais"
                     type="monotone" 
                     dataKey="total" 
                     stroke="var(--color-primary)" 
-                    strokeWidth={2.5}
+                    strokeWidth={3}
                     fillOpacity={1} 
-                    fill="url(#colorRespostas)" 
+                    fill="url(#colorTotal)" 
+                  />
+                  <Area 
+                    name="Dispositivos Únicos"
+                    type="monotone" 
+                    dataKey="unicos" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#colorUnicos)" 
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -258,7 +305,11 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="h-[180px] w-full relative">
+                <div className="h-[180px] w-full relative flex items-center justify-center">
+                  <div className="absolute flex flex-col items-center justify-center">
+                    <span className="text-2xl font-extrabold text-foreground">{respostas.length}</span>
+                    <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">Envios</span>
+                  </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -308,51 +359,44 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Gráficos Secundários: Barras Horizontais */}
+      {/* Gráficos Secundários: Barras Horizontais Customizadas (Top Performance) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico 3: Respostas por Objeto */}
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
           <div className="border-b border-border pb-4">
             <h3 className="font-bold text-foreground">Distribuição por Objeto</h3>
-            <p className="text-xs text-muted-foreground">Projetos ou eventos com maior engajamento (Top 5)</p>
+            <p className="text-xs text-muted-foreground">Projetos ou eventos com maior volume (Top 5)</p>
           </div>
-          <div className="h-[220px] w-full pt-4">
-            {respostas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
+          <div className="space-y-4 pt-2">
+            {respostasPorObjeto.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
                 <FolderGit2 className="h-12 w-12 text-muted-foreground/30 mb-3" />
                 <span>Nenhum objeto com respostas.</span>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={respostasPorObjeto} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
-                  <XAxis 
-                    type="number"
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                    allowDecimals={false}
-                  />
-                  <YAxis 
-                    type="category"
-                    dataKey="name" 
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                    width={100}
-                  />
-                  <Tooltip
-                    cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
-                    contentStyle={{
-                      backgroundColor: isDark ? 'hsl(var(--card))' : '#ffffff',
-                      borderColor: 'hsl(var(--border))',
-                      borderRadius: '0.75rem',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                  />
-                  <Bar dataKey="value" fill="var(--color-primary)" radius={[0, 4, 4, 0]} barSize={12} />
-                </BarChart>
-              </ResponsiveContainer>
+              respostasPorObjeto.map((item, index) => {
+                const maxVal = Math.max(...respostasPorObjeto.map(i => i.value), 1)
+                const pct = (item.value / maxVal) * 100
+                return (
+                  <div key={item.name} className="group space-y-1.5 p-1 rounded-lg hover:bg-muted/30 transition-all">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-[10px] text-muted-foreground w-4">#{index + 1}</span>
+                        <span className="text-foreground truncate">{item.name}</span>
+                      </div>
+                      <span className="text-primary font-extrabold">
+                        {item.value} <span className="text-[9px] text-muted-foreground font-normal">resps.</span>
+                      </span>
+                    </div>
+                    <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary to-violet-500 rounded-full transition-all duration-500" 
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
         </div>
@@ -361,45 +405,38 @@ export const Dashboard: React.FC = () => {
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
           <div className="border-b border-border pb-4">
             <h3 className="font-bold text-foreground">Liderança de Campo</h3>
-            <p className="text-xs text-muted-foreground">Respostas coletadas por líder de campo (Top 5)</p>
+            <p className="text-xs text-muted-foreground">Respostas coletadas por líder (Top 5)</p>
           </div>
-          <div className="h-[220px] w-full pt-4">
-            {respostas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
+          <div className="space-y-4 pt-2">
+            {respostasPorLider.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
                 <Users2 className="h-12 w-12 text-muted-foreground/30 mb-3" />
                 <span>Nenhum líder com respostas.</span>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={respostasPorLider} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
-                  <XAxis 
-                    type="number"
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                    allowDecimals={false}
-                  />
-                  <YAxis 
-                    type="category"
-                    dataKey="name" 
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                    width={100}
-                  />
-                  <Tooltip
-                    cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
-                    contentStyle={{
-                      backgroundColor: isDark ? 'hsl(var(--card))' : '#ffffff',
-                      borderColor: 'hsl(var(--border))',
-                      borderRadius: '0.75rem',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                  />
-                  <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} barSize={12} />
-                </BarChart>
-              </ResponsiveContainer>
+              respostasPorLider.map((item, index) => {
+                const maxVal = Math.max(...respostasPorLider.map(i => i.value), 1)
+                const pct = (item.value / maxVal) * 100
+                return (
+                  <div key={item.name} className="group space-y-1.5 p-1 rounded-lg hover:bg-muted/30 transition-all">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-[10px] text-muted-foreground w-4">#{index + 1}</span>
+                        <span className="text-foreground truncate">{item.name}</span>
+                      </div>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                        {item.value} <span className="text-[9px] text-muted-foreground font-normal">resps.</span>
+                      </span>
+                    </div>
+                    <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" 
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
         </div>
