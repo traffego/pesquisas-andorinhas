@@ -82,9 +82,9 @@ BEGIN
 
   -- 5. Inserir Pesquisas
   INSERT INTO pesquisa (id, titulo, descricao, token, publicada, objeto_id, lider_id, fluxo_id, user_id) VALUES
-    (v_pesq1_id, 'Pesquisa de Opinião - Renovação Urbana', 'Coleta de feedback sobre asfalto e iluminação', 'token-urbana-123', true, v_obj1_id, v_lid1_id, v_flx1_id, v_user_id),
-    (v_pesq2_id, 'Pesquisa de Opinião - Feira 2026', 'Coleta de avaliação sobre o evento', 'token-feira-2026', true, v_obj2_id, v_lid2_id, v_flx2_id, v_user_id),
-    (v_pesq3_id, 'Mapeamento de Demanda - Capacitação', 'Identificação de áreas de interesse em tecnologia', 'token-capacitacao-789', true, v_obj3_id, v_lid3_id, v_flx3_id, v_user_id);
+    (v_pesq1_id, 'Pesquisa de Opinião - Renovação Urbana', 'Coleta de feedback sobre asfalto e iluminação', 'token-urbana-' || substring(md5(random()::text) from 1 for 6), true, v_obj1_id, v_lid1_id, v_flx1_id, v_user_id),
+    (v_pesq2_id, 'Pesquisa de Opinião - Feira 2026', 'Coleta de avaliação sobre o evento', 'token-feira-2026-' || substring(md5(random()::text) from 1 for 6), true, v_obj2_id, v_lid2_id, v_flx2_id, v_user_id),
+    (v_pesq3_id, 'Mapeamento de Demanda - Capacitação', 'Identificação de áreas de interesse em tecnologia', 'token-capacitacao-' || substring(md5(random()::text) from 1 for 6), true, v_obj3_id, v_lid3_id, v_flx3_id, v_user_id);
 
   -- 6. Inserir 30 Respostas distribuídas
   FOR i IN 1..30 LOOP
