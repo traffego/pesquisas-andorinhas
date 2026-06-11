@@ -70,6 +70,23 @@ export const Dashboard: React.FC = () => {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [categoriasExibidas, setCategoriasExibidas] = useState<string[]>([])
   const [isConfigOpen, setIsConfigOpen] = useState(false)
+  const [categoriaDivisao, setCategoriaDivisao] = useState<string>('geral')
+
+  const opcoes = useMemo(() => {
+    if (categoriaDivisao === 'geral') return []
+    const pergsCat = perguntas.filter(p => p.categoria_id === categoriaDivisao && p.tipo === 'multipla')
+    const ops: { id: string; texto: string }[] = []
+    const seen = new Set<string>()
+    pergsCat.forEach(p => {
+      p.config?.opcoes?.forEach(o => {
+        if (!seen.has(o.id)) {
+          seen.add(o.id)
+          ops.push(o)
+        }
+      })
+    })
+    return ops
+  }, [categoriaDivisao, perguntas])
 
   useEffect(() => {
     async function loadData() {
@@ -157,34 +174,70 @@ export const Dashboard: React.FC = () => {
     return Object.values(contagem).filter(v => v.quantidade > 0)
   }
 
-  // 1. Respostas por dia filtrado por período (Total vs Únicos)
+  // 1. Respostas por dia filtrado por período (Total vs Únicos ou por categoria)
   const respostasPorDia = useMemo(() => {
     const dias = periodo === '7d' ? 7 : 30
-    const map: Record<string, { total: number; fingerprints: Set<string> }> = {}
+    const map: Record<string, any> = {}
+    const dateKeys: string[] = []
+
     for (let i = dias - 1; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
       const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-      map[key] = { total: 0, fingerprints: new Set() }
+      dateKeys.push(key)
+
+      if (categoriaDivisao === 'geral') {
+        map[key] = { total: 0, fingerprints: new Set() }
+      } else {
+        const initialObj: Record<string, any> = {}
+        opcoes.forEach(op => {
+          initialObj[op.id] = 0
+        })
+        map[key] = initialObj
+      }
     }
-    
+
     respostas.forEach(r => {
       if (!r.created_at) return
       const key = new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
       if (map[key] !== undefined) {
-        map[key].total++
-        if (r.fingerprint) {
-          map[key].fingerprints.add(r.fingerprint)
+        if (categoriaDivisao === 'geral') {
+          map[key].total++
+          if (r.fingerprint) {
+            map[key].fingerprints.add(r.fingerprint)
+          }
+        } else {
+          // Find answers to questions in this category for this response
+          const pergsCat = perguntas.filter(p => p.categoria_id === categoriaDivisao && (p.tipo === 'multipla' || p.tipo as string === 'multiples'))
+          pergsCat.forEach(p => {
+            const val = r.valores?.[p.id]
+            if (!val) return
+            const arr = Array.isArray(val) ? val : [val]
+            arr.forEach((id: string) => {
+              if (map[key][id] !== undefined) {
+                map[key][id]++
+              }
+            })
+          })
         }
       }
     })
-    
-    return Object.entries(map).map(([data, val]) => ({ 
-      data, 
-      total: val.total, 
-      unicos: val.fingerprints.size 
-    }))
-  }, [respostas, periodo])
+
+    return dateKeys.map(key => {
+      if (categoriaDivisao === 'geral') {
+        return {
+          data: key,
+          total: map[key].total,
+          unicos: map[key].fingerprints.size
+        }
+      } else {
+        return {
+          data: key,
+          ...map[key]
+        }
+      }
+    })
+  }, [respostas, periodo, categoriaDivisao, opcoes, perguntas])
 
   // 2. Respostas por Pesquisa (Top 5)
   const respostasPorPesquisa = useMemo(() => {
@@ -268,7 +321,24 @@ export const Dashboard: React.FC = () => {
               <h3 className="font-bold text-foreground">Engajamento de Respostas</h3>
               <p className="text-xs text-muted-foreground">Volume de envios versus participantes únicos</p>
             </div>
-            <div className="flex bg-muted p-1 rounded-xl gap-1 self-start sm:self-auto">
+            <div className="flex bg-muted p-1 rounded-xl gap-2 self-start sm:self-auto items-center">
+              {categorias.length > 0 && (
+                <>
+                  <select
+                    value={categoriaDivisao}
+                    onChange={(e) => setCategoriaDivisao(e.target.value)}
+                    className="bg-transparent text-xs font-semibold px-2 py-1.5 focus:outline-none text-muted-foreground hover:text-foreground cursor-pointer border-none outline-none"
+                  >
+                    <option value="geral" className="bg-card text-foreground font-semibold">Geral (Total vs Únicos)</option>
+                    {categorias.map(cat => (
+                      <option key={cat.id} value={cat.id} className="bg-card text-foreground font-semibold">
+                        Dividir por: {cat.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="w-[1px] h-4 bg-border" />
+                </>
+              )}
               <button
                 onClick={() => setPeriodo('7d')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -337,24 +407,44 @@ export const Dashboard: React.FC = () => {
                     allowDecimals={false}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area 
-                    name="Envios Totais"
-                    type="monotone" 
-                    dataKey="total" 
-                    stroke="var(--color-primary)" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorTotal)" 
-                  />
-                  <Area 
-                    name="Dispositivos Únicos"
-                    type="monotone" 
-                    dataKey="unicos" 
-                    stroke="#8b5cf6" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorUnicos)" 
-                  />
+                  {categoriaDivisao === 'geral' ? (
+                    <>
+                      <Area 
+                        name="Envios Totais"
+                        type="monotone" 
+                        dataKey="total" 
+                        stroke="var(--color-primary)" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorTotal)" 
+                      />
+                      <Area 
+                        name="Dispositivos Únicos"
+                        type="monotone" 
+                        dataKey="unicos" 
+                        stroke="#8b5cf6" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorUnicos)" 
+                      />
+                    </>
+                  ) : (
+                    opcoes.map((op, idx) => {
+                      const color = CHART_COLORS[idx % CHART_COLORS.length]
+                      return (
+                        <Area
+                          key={op.id}
+                          name={op.texto}
+                          type="monotone"
+                          dataKey={op.id}
+                          stroke={color}
+                          strokeWidth={2.5}
+                          fillOpacity={0.08}
+                          fill={color}
+                        />
+                      )
+                    })
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             )}
