@@ -5,11 +5,9 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { 
   FolderGit2, 
   Users2, 
-  ClipboardList, 
   ArrowUpRight, 
   FilePlus,
   MessageSquare,
-  TrendingUp,
   Clock,
   Calendar
 } from 'lucide-react'
@@ -35,6 +33,7 @@ export const Dashboard: React.FC = () => {
   const [lideres, setLideres] = useState<Lider[]>([])
   const [pesquisas, setPesquisas] = useState<Pesquisa[]>([])
   const [respostas, setRespostas] = useState<any[]>([])
+  const [periodo, setPeriodo] = useState<'7d' | '30d'>('30d')
   const [loading, setLoading] = useState(true)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -67,10 +66,11 @@ export const Dashboard: React.FC = () => {
     loadData()
   }, [])
 
-  // 1. Respostas por dia nos últimos 30 dias
+  // 1. Respostas por dia filtrado por período
   const respostasPorDia = useMemo(() => {
+    const dias = periodo === '7d' ? 7 : 30
     const map: Record<string, number> = {}
-    for (let i = 29; i >= 0; i--) {
+    for (let i = dias - 1; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
       const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
@@ -86,7 +86,7 @@ export const Dashboard: React.FC = () => {
     })
     
     return Object.entries(map).map(([data, total]) => ({ data, total }))
-  }, [respostas])
+  }, [respostas, periodo])
 
   // 2. Respostas por Pesquisa (Top 5)
   const respostasPorPesquisa = useMemo(() => {
@@ -138,41 +138,6 @@ export const Dashboard: React.FC = () => {
   const totalPublicadas = pesquisas.filter(p => p.publicada).length
   const taxaEngajamento = pesquisas.length > 0 ? (respostas.length / pesquisas.length).toFixed(1) : '0'
 
-  const metricas = [
-    { 
-      label: 'Total de Respostas', 
-      valor: respostas.length, 
-      sub: `${taxaEngajamento} por pesquisa`, 
-      icon: MessageSquare, 
-      color: 'from-blue-500/10 to-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20', 
-      path: '/admin/relatorios' 
-    },
-    { 
-      label: 'Pesquisas Ativas', 
-      valor: `${totalPublicadas}/${pesquisas.length}`, 
-      sub: `${pesquisas.length - totalPublicadas} rascunhos`, 
-      icon: ClipboardList, 
-      color: 'from-primary/10 to-violet-500/10 text-primary border-primary/20', 
-      path: '/admin/pesquisas' 
-    },
-    { 
-      label: 'Líderes Cadastrados', 
-      valor: lideres.length, 
-      sub: 'Mapeamento de campo', 
-      icon: Users2, 
-      color: 'from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', 
-      path: '/admin/lideres' 
-    },
-    { 
-      label: 'Objetos Ativos', 
-      valor: objetos.length, 
-      sub: 'Projetos e eventos', 
-      icon: FolderGit2, 
-      color: 'from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', 
-      path: '/admin/objetos' 
-    },
-  ]
-
   return (
     <div className="space-y-8 animate-fade-in text-foreground">
       {/* Cabeçalho */}
@@ -190,53 +155,49 @@ export const Dashboard: React.FC = () => {
         </Link>
       </div>
 
-      {/* Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metricas.map((met, i) => {
-          const Icon = met.icon
-          return (
-            <Link 
-              key={i} 
-              to={met.path}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 hover:border-primary/30 transition-all duration-300 shadow-sm hover:shadow-md hover:scale-[1.01]"
-            >
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{met.label}</p>
-                  <p className="text-3xl font-extrabold text-foreground tracking-tight">{met.valor}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">{met.sub}</p>
-                </div>
-                <div className={`rounded-xl p-3 bg-gradient-to-br border ${met.color}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground group-hover:text-primary transition-colors font-medium">
-                <span>Ver detalhes</span>
-                <ArrowUpRight className="h-3 w-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-              </div>
-            </Link>
-          )
-        })}
-      </div>
-
-      {/* Seção de Gráficos Principais */}
+      {/* Seção de Gráficos Principais (NO TOPO) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Gráfico 1: Histórico */}
-        <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between border-b border-border pb-4">
+        <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 space-y-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
             <div>
               <h3 className="font-bold text-foreground">Volume de Respostas</h3>
-              <p className="text-xs text-muted-foreground">Respostas recebidas por dia nos últimos 30 dias</p>
+              <p className="text-xs text-muted-foreground">Envio diário no período selecionado</p>
             </div>
-            <div className="p-2 rounded-lg bg-muted text-muted-foreground">
-              <TrendingUp className="h-4 w-4" />
+            <div className="flex bg-muted p-1 rounded-xl gap-1 self-start sm:self-auto">
+              <button
+                onClick={() => setPeriodo('7d')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  periodo === '7d' 
+                    ? 'bg-card text-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                7 dias
+              </button>
+              <button
+                onClick={() => setPeriodo('30d')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  periodo === '30d' 
+                    ? 'bg-card text-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                30 dias
+              </button>
             </div>
           </div>
-          <div className="h-[300px] w-full pt-4">
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-extrabold tracking-tight text-foreground">{respostas.length}</span>
+            <span className="text-xs text-muted-foreground font-medium">respostas coletadas no total</span>
+          </div>
+
+          <div className="h-[280px] w-full pt-2">
             {respostas.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                 <Calendar className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                <span>Sem dados de respostas nos últimos 30 dias.</span>
+                <span>Sem dados de respostas para o período.</span>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -272,7 +233,7 @@ export const Dashboard: React.FC = () => {
                     type="monotone" 
                     dataKey="total" 
                     stroke="var(--color-primary)" 
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     fillOpacity={1} 
                     fill="url(#colorRespostas)" 
                   />
@@ -347,15 +308,15 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Gráficos Secundários */}
+      {/* Gráficos Secundários: Barras Horizontais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico 3: Respostas por Objeto */}
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
           <div className="border-b border-border pb-4">
-            <h3 className="font-bold text-foreground">Top Objetos</h3>
-            <p className="text-xs text-muted-foreground">Total de respostas por projeto ou evento (Top 5)</p>
+            <h3 className="font-bold text-foreground">Distribuição por Objeto</h3>
+            <p className="text-xs text-muted-foreground">Projetos ou eventos com maior engajamento (Top 5)</p>
           </div>
-          <div className="h-[260px] w-full pt-4">
+          <div className="h-[220px] w-full pt-4">
             {respostas.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                 <FolderGit2 className="h-12 w-12 text-muted-foreground/30 mb-3" />
@@ -363,19 +324,22 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={respostasPorObjeto} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
+                <BarChart layout="vertical" data={respostasPorObjeto} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
                   <XAxis 
-                    dataKey="name" 
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                  />
-                  <YAxis 
+                    type="number"
                     tickLine={false} 
                     axisLine={false}
                     tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
                     allowDecimals={false}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="name" 
+                    tickLine={false} 
+                    axisLine={false}
+                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
+                    width={100}
                   />
                   <Tooltip
                     cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
@@ -386,7 +350,7 @@ export const Dashboard: React.FC = () => {
                       color: 'hsl(var(--foreground))'
                     }}
                   />
-                  <Bar dataKey="value" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="value" fill="var(--color-primary)" radius={[0, 4, 4, 0]} barSize={12} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -396,10 +360,10 @@ export const Dashboard: React.FC = () => {
         {/* Gráfico 4: Respostas por Líder */}
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
           <div className="border-b border-border pb-4">
-            <h3 className="font-bold text-foreground">Top Líderes</h3>
-            <p className="text-xs text-muted-foreground">Total de respostas por líder de campo (Top 5)</p>
+            <h3 className="font-bold text-foreground">Liderança de Campo</h3>
+            <p className="text-xs text-muted-foreground">Respostas coletadas por líder de campo (Top 5)</p>
           </div>
-          <div className="h-[260px] w-full pt-4">
+          <div className="h-[220px] w-full pt-4">
             {respostas.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                 <Users2 className="h-12 w-12 text-muted-foreground/30 mb-3" />
@@ -407,19 +371,22 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={respostasPorLider} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
+                <BarChart layout="vertical" data={respostasPorLider} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
                   <XAxis 
-                    dataKey="name" 
-                    tickLine={false} 
-                    axisLine={false}
-                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
-                  />
-                  <YAxis 
+                    type="number"
                     tickLine={false} 
                     axisLine={false}
                     tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
                     allowDecimals={false}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="name" 
+                    tickLine={false} 
+                    axisLine={false}
+                    tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 11 }}
+                    width={100}
                   />
                   <Tooltip
                     cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
@@ -430,7 +397,7 @@ export const Dashboard: React.FC = () => {
                       color: 'hsl(var(--foreground))'
                     }}
                   />
-                  <Bar dataKey="value" fill="#10b981" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} barSize={12} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -438,7 +405,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Recentes e Objetos */}
+      {/* Recentes e Resumo (EMBAIXO) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Atividades Recentes */}
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
@@ -493,41 +460,32 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Objetos Rápidos */}
+        {/* Resumo do Sistema */}
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm flex flex-col justify-between">
           <div className="space-y-4">
-            <div className="flex justify-between items-center border-b border-border pb-4">
-              <div>
-                <h3 className="font-bold text-foreground">Objetos Ativos</h3>
-                <p className="text-xs text-muted-foreground">Projetos e eventos cadastrados</p>
+            <h3 className="font-bold text-foreground border-b border-border pb-4">Resumo Geral</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-muted/40 rounded-xl border border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase">Pesquisas</p>
+                <p className="text-xl font-extrabold text-foreground mt-1">{pesquisas.length}</p>
+                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">{totalPublicadas} ativas</p>
               </div>
-              <Link to="/admin/objetos" className="text-xs text-primary hover:underline font-semibold">Ver todos</Link>
+              <div className="p-4 bg-muted/40 rounded-xl border border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase">Líderes</p>
+                <p className="text-xl font-extrabold text-foreground mt-1">{lideres.length}</p>
+                <p className="text-[9px] text-muted-foreground font-medium mt-0.5">Cadastrados</p>
+              </div>
+              <div className="p-4 bg-muted/40 rounded-xl border border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase">Objetos</p>
+                <p className="text-xl font-extrabold text-foreground mt-1">{objetos.length}</p>
+                <p className="text-[9px] text-muted-foreground font-medium mt-0.5">Projetos/Eventos</p>
+              </div>
+              <div className="p-4 bg-muted/40 rounded-xl border border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase">Engajamento</p>
+                <p className="text-xl font-extrabold text-foreground mt-1">{taxaEngajamento}</p>
+                <p className="text-[9px] text-muted-foreground font-medium mt-0.5">Resp./pesquisa</p>
+              </div>
             </div>
-
-            {objetos.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                Nenhum objeto cadastrado.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {objetos.slice(0, 4).map((obj) => {
-                  const count = pesquisas.filter(pesq => pesq.objeto_id === obj.id).length
-                  return (
-                    <div key={obj.id} className="p-3 bg-muted/50 rounded-xl border border-border flex items-center justify-between hover:border-primary/20 transition-all">
-                      <div className="min-w-0 pr-2">
-                        <p className="text-xs font-bold text-foreground truncate">
-                          {obj.tipo === 'projeto' ? '📁' : '📅'} {obj.nome}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{obj.descricao || 'Sem descrição'}</p>
-                      </div>
-                      <span className="text-xs bg-card text-primary border border-border px-2.5 py-1 rounded-lg font-bold shrink-0">
-                        {count} {count === 1 ? 'Pesq.' : 'Pesqs.'}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </div>
         </div>
       </div>
