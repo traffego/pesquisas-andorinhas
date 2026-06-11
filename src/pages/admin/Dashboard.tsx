@@ -11,8 +11,7 @@ import {
   MessageSquare,
   TrendingUp,
   Clock,
-  Calendar,
-  Sparkles
+  Calendar
 } from 'lucide-react'
 import {
   AreaChart,
@@ -176,32 +175,19 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in text-foreground">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-card to-card/60 p-6 md:p-8 shadow-xl">
-        <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 h-64 w-64 rounded-full bg-primary/5 blur-3xl"></div>
-        <div className="relative z-10 max-w-3xl flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-              <Sparkles className="h-3 w-3" />
-              Painel Inteligente
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
-              Olá, seja bem-vindo ao Andorinha
-            </h1>
-            <p className="text-muted-foreground text-sm leading-relaxed max-w-xl">
-              Monitore a coleta de dados, gerencie fluxos de perguntas dinâmicas e veja relatórios consolidados em tempo real.
-            </p>
-          </div>
-          <div className="flex gap-4 shrink-0">
-            <Link
-              to="/admin/pesquisas"
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <FilePlus className="h-4 w-4" />
-              Nova Pesquisa
-            </Link>
-          </div>
+      {/* Cabeçalho */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Painel Geral</h1>
+          <p className="text-xs text-muted-foreground">Estatísticas e monitoramento em tempo real</p>
         </div>
+        <Link
+          to="/admin/pesquisas"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <FilePlus className="h-4 w-4" />
+          Nova Pesquisa
+        </Link>
       </div>
 
       {/* Métricas */}
