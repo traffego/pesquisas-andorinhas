@@ -553,7 +553,8 @@ export const Builder: React.FC = () => {
             config: n.data.config,
             subflowId: n.data.subflowId,
             subflowTitulo: n.data.subflowTitulo,
-            perguntas: n.data.perguntas
+            perguntas: n.data.perguntas,
+            categoria_id: n.data.categoria_id
           }
         })),
         edges

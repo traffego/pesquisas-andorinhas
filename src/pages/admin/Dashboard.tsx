@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { dbService, type Objeto, type Lider, type Pesquisa } from '../../services/db'
+import { dbService, type Objeto, type Lider, type Pesquisa, type Pergunta, type CategoriaCampo } from '../../services/db'
 import { useTheme } from '../../contexts/ThemeContext'
 import { 
   FolderGit2, 
@@ -9,7 +9,11 @@ import {
   FilePlus,
   MessageSquare,
   Clock,
-  Calendar
+  Calendar,
+  Settings,
+  Check,
+  ChevronDown,
+  Tag
 } from 'lucide-react'
 import {
   AreaChart,
@@ -21,10 +25,13 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  BarChart,
+  Bar
 } from 'recharts'
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e']
+const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#06b6d4', '#ec4899']
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -58,6 +65,12 @@ export const Dashboard: React.FC = () => {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
+  // Estados para gráficos de demografia / categorias
+  const [categorias, setCategorias] = useState<CategoriaCampo[]>([])
+  const [perguntas, setPerguntas] = useState<Pergunta[]>([])
+  const [categoriasExibidas, setCategoriasExibidas] = useState<string[]>([])
+  const [isConfigOpen, setIsConfigOpen] = useState(false)
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -74,8 +87,30 @@ export const Dashboard: React.FC = () => {
         if (pesqIds.length > 0) {
           const { respostas: respData } = await dbService.getRelatoriosGlobais(pesqIds)
           setRespostas(respData || [])
+
+          // Carregar perguntas e categorias dos fluxos ativos
+          const fluxoIds = Array.from(new Set(pesqData.map(p => p.fluxo_id).filter(Boolean))) as string[]
+          const [cats, pergs] = await Promise.all([
+            dbService.getCategorias(),
+            dbService.getPerguntasByFluxos(fluxoIds)
+          ])
+          setCategorias(cats)
+          setPerguntas(pergs)
+
+          // Carregar categorias selecionadas do localStorage
+          const saved = localStorage.getItem('dashboard_categorias_exibidas')
+          if (saved) {
+            setCategoriasExibidas(JSON.parse(saved))
+          } else {
+            // Mostrar por padrão as que têm perguntas vinculadas
+            const activeCatIds = Array.from(new Set(pergs.map(p => p.categoria_id).filter(Boolean))) as string[]
+            setCategoriasExibidas(activeCatIds)
+          }
         } else {
           setRespostas([])
+          setCategorias([])
+          setPerguntas([])
+          setCategoriasExibidas([])
         }
       } catch (err) {
         console.error('Erro ao carregar dados do dashboard:', err)
@@ -85,6 +120,42 @@ export const Dashboard: React.FC = () => {
     }
     loadData()
   }, [])
+
+  const toggleCategoriaExibida = (catId: string) => {
+    setCategoriasExibidas(prev => {
+      const next = prev.includes(catId)
+        ? prev.filter(id => id !== catId)
+        : [...prev, catId]
+      localStorage.setItem('dashboard_categorias_exibidas', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const getGraficoCat = (catId: string, pergsList: Pergunta[], respsList: any[]) => {
+    const pergsDestaCategoria = pergsList.filter(p => p.categoria_id === catId && p.tipo === 'multipla')
+    if (pergsDestaCategoria.length === 0) return []
+
+    const contagem: Record<string, { nome: string; quantidade: number }> = {}
+    
+    pergsDestaCategoria.forEach(p => {
+      p.config?.opcoes?.forEach(o => {
+        if (!contagem[o.id]) contagem[o.id] = { nome: o.texto, quantidade: 0 }
+      })
+    })
+
+    respsList.forEach(resp => {
+      pergsDestaCategoria.forEach(p => {
+        const val = resp.valores[p.id]
+        if (!val) return
+        const arr = Array.isArray(val) ? val : [val]
+        arr.forEach((id: string) => {
+          if (contagem[id]) contagem[id].quantidade += 1
+        })
+      })
+    })
+
+    return Object.values(contagem).filter(v => v.quantidade > 0)
+  }
 
   // 1. Respostas por dia filtrado por período (Total vs Únicos)
   const respostasPorDia = useMemo(() => {
@@ -358,6 +429,108 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Seção de Gráficos de Categorias */}
+      {categorias.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Dados Demográficos</h3>
+              <p className="text-xs text-muted-foreground">Distribuição de respostas por categoria cadastrada</p>
+            </div>
+            
+            {/* Seletor de Categorias */}
+            <div className="relative">
+              <button
+                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-all cursor-pointer shadow-sm"
+              >
+                <Settings className="h-4 w-4 text-muted-foreground" />
+                Escolher Gráficos
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+
+              {isConfigOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsConfigOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border bg-card p-2 shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 py-1.5">Categorias Disponíveis</p>
+                    <div className="space-y-1">
+                      {categorias.map(cat => {
+                        const isSelected = categoriasExibidas.includes(cat.id)
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => toggleCategoriaExibida(cat.id)}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold hover:bg-muted text-foreground transition-colors cursor-pointer text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                              {cat.nome}
+                            </span>
+                            {isSelected && <Check className="h-4 w-4 text-primary" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {categoriasExibidas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed border-border rounded-2xl bg-card/50 p-12 text-center text-muted-foreground space-y-3">
+              <Tag className="h-12 w-12 text-muted-foreground/30" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">Nenhum gráfico demográfico selecionado</p>
+                <p className="text-xs">Clique em "Escolher Gráficos" para exibir dados demográficos no dashboard.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categoriasExibidas.map(catId => {
+                const cat = categorias.find(c => c.id === catId)
+                if (!cat) return null
+                const dados = getGraficoCat(cat.id, perguntas, respostas)
+                if (dados.length === 0) return null
+
+                return (
+                  <div key={cat.id} className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm flex flex-col justify-between">
+                    <div className="border-b border-border pb-3 flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-primary" />
+                      <h4 className="font-bold text-foreground">{cat.nome}</h4>
+                    </div>
+                    <div className="h-56 w-full pt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dados} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#1f2937' : '#e5e7eb'} />
+                          <XAxis dataKey="nome" tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 10 }} />
+                          <YAxis tick={{ fill: isDark ? '#9ca3af' : '#4b5563', fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: isDark ? 'hsl(var(--card))' : '#ffffff',
+                              borderColor: 'hsl(var(--border))',
+                              borderRadius: '0.75rem',
+                              color: 'hsl(var(--foreground))'
+                            }}
+                          />
+                          <Bar dataKey="quantidade" radius={[4, 4, 0, 0]}>
+                            {dados.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Gráficos Secundários: Barras Horizontais Customizadas (Top Performance) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
