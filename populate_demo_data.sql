@@ -119,11 +119,86 @@ BEGIN
     (v_lid2_id, 'Maria Oliveira', '(21) 99888-7766', 'maria.oliveira@email.com', v_user_id),
     (v_lid3_id, 'Carlos Santos', '(31) 99111-2233', 'carlos.santos@email.com', v_user_id);
 
-  -- 5. Inserir Fluxos
+  -- 5. Inserir Fluxos (incluindo a estrutura visual de nós e arestas para edição no Builder)
   INSERT INTO fluxo (id, nome, descricao, flow_data, tipo, user_id) VALUES
-    (v_flx1_id, 'Satisfação de Infraestrutura', 'Avaliação de asfalto, saneamento e iluminação', '{}'::jsonb, 'fluxo', v_user_id),
-    (v_flx2_id, 'Feedback de Evento Público', 'Pesquisa sobre organização, atrações e segurança', '{}'::jsonb, 'fluxo', v_user_id),
-    (v_flx3_id, 'Interesse em Cursos', 'Mapeamento de demanda por cursos técnicos', '{}'::jsonb, 'fluxo', v_user_id);
+    (
+      v_flx1_id, 
+      'Satisfação de Infraestrutura', 
+      'Avaliação de asfalto, saneamento e iluminação', 
+      jsonb_build_object(
+        'nodes', jsonb_build_array(
+          jsonb_build_object('id', 'start', 'type', 'start', 'position', jsonb_build_object('x', 250, 'y', 0), 'data', jsonb_build_object('id', 'start')),
+          jsonb_build_object('id', v_perg1_1, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 120), 'data', jsonb_build_object('id', v_perg1_1, 'titulo', 'Qual sua opinião sobre o asfalto da sua rua?', 'tipo', 'texto_curto', 'obrigatoria', true, 'config', '{}'::jsonb)),
+          jsonb_build_object('id', v_perg1_2, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 260), 'data', jsonb_build_object('id', v_perg1_2, 'titulo', 'Como você avalia a iluminação pública?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "otima", "texto": "Ótima"}, {"id": "regular", "texto": "Regular"}, {"id": "ruim", "texto": "Ruim"}]}'::jsonb)),
+          jsonb_build_object('id', v_perg1_sexo, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 400), 'data', jsonb_build_object('id', v_perg1_sexo, 'titulo', 'Qual o seu sexo?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "masc", "texto": "Masculino"}, {"id": "fem", "texto": "Feminino"}, {"id": "outro", "texto": "Outro"}, {"id": "pref_nao_dizer", "texto": "Prefiro não responder"}]}'::jsonb, 'categoria_id', v_cat_sexo_id)),
+          jsonb_build_object('id', v_perg1_idade, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 540), 'data', jsonb_build_object('id', v_perg1_idade, 'titulo', 'Qual a sua faixa etária?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "ate_24", "texto": "Até 24 anos"}, {"id": "25_a_44", "texto": "25 a 44 anos"}, {"id": "45_a_59", "texto": "45 a 59 anos"}, {"id": "60_ou_mais", "texto": "60 anos ou mais"}]}'::jsonb, 'categoria_id', v_cat_idade_id)),
+          jsonb_build_object('id', v_perg1_local, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 680), 'data', jsonb_build_object('id', v_perg1_local, 'titulo', 'Qual a sua região/bairro?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "centro", "texto": "Região Central"}, {"id": "z_norte", "texto": "Zona Norte"}, {"id": "z_sul", "texto": "Zona Sul"}, {"id": "z_leste", "texto": "Zona Leste"}, {"id": "z_oeste", "texto": "Zona Oeste"}]}'::jsonb, 'categoria_id', v_cat_local_id)),
+          jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
+        ),
+        'edges', jsonb_build_array(
+          jsonb_build_object('id', 'e-start-' || v_perg1_1, 'source', 'start', 'target', v_perg1_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_1 || '-' || v_perg1_2, 'source', v_perg1_1, 'target', v_perg1_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_2 || '-' || v_perg1_sexo, 'source', v_perg1_2, 'target', v_perg1_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_sexo || '-' || v_perg1_idade, 'source', v_perg1_sexo, 'target', v_perg1_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_idade || '-' || v_perg1_local, 'source', v_perg1_idade, 'target', v_perg1_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg1_local || '-end', 'source', v_perg1_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+        )
+      ), 
+      'fluxo', 
+      v_user_id
+    ),
+    (
+      v_flx2_id, 
+      'Feedback de Evento Público', 
+      'Pesquisa sobre organização, atrações e segurança', 
+      jsonb_build_object(
+        'nodes', jsonb_build_array(
+          jsonb_build_object('id', 'start', 'type', 'start', 'position', jsonb_build_object('x', 250, 'y', 0), 'data', jsonb_build_object('id', 'start')),
+          jsonb_build_object('id', v_perg2_1, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 120), 'data', jsonb_build_object('id', v_perg2_1, 'titulo', 'Dê uma nota de 1 a 5 para a organização geral do evento', 'tipo', 'avaliacao', 'obrigatoria', true, 'config', '{}'::jsonb)),
+          jsonb_build_object('id', v_perg2_2, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 260), 'data', jsonb_build_object('id', v_perg2_2, 'titulo', 'O que você mais gostou no evento?', 'tipo', 'texto_curto', 'obrigatoria', false, 'config', '{}'::jsonb)),
+          jsonb_build_object('id', v_perg2_sexo, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 400), 'data', jsonb_build_object('id', v_perg2_sexo, 'titulo', 'Qual o seu sexo?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "masc", "texto": "Masculino"}, {"id": "fem", "texto": "Feminino"}, {"id": "outro", "texto": "Outro"}, {"id": "pref_nao_dizer", "texto": "Prefiro não responder"}]}'::jsonb, 'categoria_id', v_cat_sexo_id)),
+          jsonb_build_object('id', v_perg2_idade, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 540), 'data', jsonb_build_object('id', v_perg2_idade, 'titulo', 'Qual a sua faixa etária?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "ate_24", "texto": "Até 24 anos"}, {"id": "25_a_44", "texto": "25 a 44 anos"}, {"id": "45_a_59", "texto": "45 a 59 anos"}, {"id": "60_ou_mais", "texto": "60 anos ou mais"}]}'::jsonb, 'categoria_id', v_cat_idade_id)),
+          jsonb_build_object('id', v_perg2_local, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 680), 'data', jsonb_build_object('id', v_perg2_local, 'titulo', 'Qual a sua região/bairro?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "centro", "texto": "Região Central"}, {"id": "z_norte", "texto": "Zona Norte"}, {"id": "z_sul", "texto": "Zona Sul"}, {"id": "z_leste", "texto": "Zona Leste"}, {"id": "z_oeste", "texto": "Zona Oeste"}]}'::jsonb, 'categoria_id', v_cat_local_id)),
+          jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
+        ),
+        'edges', jsonb_build_array(
+          jsonb_build_object('id', 'e-start-' || v_perg2_1, 'source', 'start', 'target', v_perg2_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_1 || '-' || v_perg2_2, 'source', v_perg2_1, 'target', v_perg2_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_2 || '-' || v_perg2_sexo, 'source', v_perg2_2, 'target', v_perg2_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_sexo || '-' || v_perg2_idade, 'source', v_perg2_sexo, 'target', v_perg2_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_idade || '-' || v_perg2_local, 'source', v_perg2_idade, 'target', v_perg2_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg2_local || '-end', 'source', v_perg2_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+        )
+      ),
+      'fluxo', 
+      v_user_id
+    ),
+    (
+      v_flx3_id, 
+      'Interesse em Cursos', 
+      'Mapeamento de demanda por cursos técnicos', 
+      jsonb_build_object(
+        'nodes', jsonb_build_array(
+          jsonb_build_object('id', 'start', 'type', 'start', 'position', jsonb_build_object('x', 250, 'y', 0), 'data', jsonb_build_object('id', 'start')),
+          jsonb_build_object('id', v_perg3_1, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 120), 'data', jsonb_build_object('id', v_perg3_1, 'titulo', 'Qual área de cursos você tem mais interesse?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "programacao", "texto": "Programação"}, {"id": "design", "texto": "Design Digital"}, {"id": "marketing", "texto": "Marketing"}]}'::jsonb)),
+          jsonb_build_object('id', v_perg3_2, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 260), 'data', jsonb_build_object('id', v_perg3_2, 'titulo', 'Deixe seu e-mail para contato', 'tipo', 'email', 'obrigatoria', true, 'config', '{}'::jsonb)),
+          jsonb_build_object('id', v_perg3_sexo, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 400), 'data', jsonb_build_object('id', v_perg3_sexo, 'titulo', 'Qual o seu sexo?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "masc", "texto": "Masculino"}, {"id": "fem", "texto": "Feminino"}, {"id": "outro", "texto": "Outro"}, {"id": "pref_nao_dizer", "texto": "Prefiro não responder"}]}'::jsonb, 'categoria_id', v_cat_sexo_id)),
+          jsonb_build_object('id', v_perg3_idade, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 540), 'data', jsonb_build_object('id', v_perg3_idade, 'titulo', 'Qual a sua faixa etária?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "ate_24", "texto": "Até 24 anos"}, {"id": "25_a_44", "texto": "25 a 44 anos"}, {"id": "45_a_59", "texto": "45 a 59 anos"}, {"id": "60_ou_mais", "texto": "60 anos ou mais"}]}'::jsonb, 'categoria_id', v_cat_idade_id)),
+          jsonb_build_object('id', v_perg3_local, 'type', 'question', 'position', jsonb_build_object('x', 250, 'y', 680), 'data', jsonb_build_object('id', v_perg3_local, 'titulo', 'Qual a sua região/bairro?', 'tipo', 'multipla', 'obrigatoria', true, 'config', '{"opcoes": [{"id": "centro", "texto": "Região Central"}, {"id": "z_norte", "texto": "Zona Norte"}, {"id": "z_sul", "texto": "Zona Sul"}, {"id": "z_leste", "texto": "Zona Leste"}, {"id": "z_oeste", "texto": "Zona Oeste"}]}'::jsonb, 'categoria_id', v_cat_local_id)),
+          jsonb_build_object('id', 'end', 'type', 'end', 'position', jsonb_build_object('x', 250, 'y', 820), 'data', jsonb_build_object('id', 'end'))
+        ),
+        'edges', jsonb_build_array(
+          jsonb_build_object('id', 'e-start-' || v_perg3_1, 'source', 'start', 'target', v_perg3_1, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_1 || '-' || v_perg3_2, 'source', v_perg3_1, 'target', v_perg3_2, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_2 || '-' || v_perg3_sexo, 'source', v_perg3_2, 'target', v_perg3_sexo, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_sexo || '-' || v_perg3_idade, 'source', v_perg3_sexo, 'target', v_perg3_idade, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_idade || '-' || v_perg3_local, 'source', v_perg3_idade, 'target', v_perg3_local, 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b')),
+          jsonb_build_object('id', 'e-' || v_perg3_local || '-end', 'source', v_perg3_local, 'target', 'end', 'type', 'custom', 'markerEnd', jsonb_build_object('type', 'arrowclosed', 'color', '#52525b'))
+        )
+      ),
+      'fluxo', 
+      v_user_id
+    );
 
   -- 6. Inserir Perguntas para cada Fluxo (incluindo demográficos categorizados)
   -- Fluxo 1 (Satisfação)
