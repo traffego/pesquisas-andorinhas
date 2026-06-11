@@ -41,10 +41,30 @@ BEGIN
     RAISE EXCEPTION 'Nenhum usuário cadastrado no auth.users. Por favor, crie uma conta no sistema primeiro.';
   END IF;
 
-  -- Limpar dados anteriores para evitar chaves duplicadas (opcional)
-  -- DELETE FROM objeto;
-  -- DELETE FROM lider;
-  -- DELETE FROM fluxo;
+  -- Limpar dados anteriores para evitar chaves duplicadas
+  DELETE FROM resposta_item WHERE resposta_id IN (
+    SELECT r.id FROM resposta r
+    JOIN pesquisa p ON r.pesquisa_id = p.id
+    WHERE p.token LIKE 'token-urbana%' OR p.token LIKE 'token-feira%' OR p.token LIKE 'token-capacitacao%'
+  );
+  
+  DELETE FROM resposta WHERE pesquisa_id IN (
+    SELECT id FROM pesquisa 
+    WHERE token LIKE 'token-urbana%' OR token LIKE 'token-feira%' OR token LIKE 'token-capacitacao%'
+  );
+  
+  DELETE FROM pesquisa WHERE token LIKE 'token-urbana%' OR token LIKE 'token-feira%' OR token LIKE 'token-capacitacao%';
+  
+  DELETE FROM pergunta WHERE fluxo_id IN (
+    SELECT id FROM fluxo 
+    WHERE nome IN ('Satisfação de Infraestrutura', 'Feedback de Evento Público', 'Interesse em Cursos')
+  );
+  
+  DELETE FROM fluxo WHERE nome IN ('Satisfação de Infraestrutura', 'Feedback de Evento Público', 'Interesse em Cursos');
+  
+  DELETE FROM lider WHERE nome IN ('Roberto Silva', 'Maria Oliveira', 'Carlos Santos');
+  
+  DELETE FROM objeto WHERE nome IN ('Projeto Renovação Urbana', 'Feira da Comunidade 2026', 'Capacitação Profissional Digital');
 
   -- 1. Inserir Objetos
   INSERT INTO objeto (id, nome, descricao, tipo, termo_fomento, codigo_objeto, codigo_programa, nome_programa, user_id) VALUES
