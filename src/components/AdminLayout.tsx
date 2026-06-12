@@ -12,7 +12,9 @@ import {
   Sun,
   Moon,
   GitFork,
-  BarChart2
+  BarChart2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 export const AdminLayout: React.FC = () => {
@@ -20,6 +22,14 @@ export const AdminLayout: React.FC = () => {
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+  
+  const [collapsed, setCollapsed] = React.useState(() => {
+    return localStorage.getItem('sidebar-collapsed') === 'true'
+  })
+
+  React.useEffect(() => {
+    localStorage.setItem('sidebar-collapsed', String(collapsed))
+  }, [collapsed])
 
   const handleLogout = async () => {
     await signOut()
@@ -40,10 +50,21 @@ export const AdminLayout: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-200">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card/50 backdrop-blur-md flex flex-col">
-        {/* Logo */}
-        <div className="p-5 border-b border-border flex items-center justify-center">
-          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1" />
+      <aside className={`border-r border-border bg-card/50 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out ${
+        collapsed ? 'w-20' : 'w-64'
+      }`}>
+        {/* Logo & Toggle */}
+        <div className={`p-5 border-b border-border flex items-center justify-between ${collapsed ? 'flex-col gap-4' : ''}`}>
+          {!collapsed && (
+            <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1" />
+          )}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-sm"
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
 
         {/* Navigation */}
@@ -55,36 +76,51 @@ export const AdminLayout: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center rounded-xl transition-all duration-200 group ${
+                  collapsed ? 'justify-center p-3' : 'gap-3 px-4 py-3'
+                } ${
                   active
                     ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <Icon className={`h-5 w-5 ${active ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground'}`} />
-                <span className="font-medium text-sm">{item.label}</span>
+                {!collapsed && <span className="font-medium text-sm transition-all duration-200 whitespace-nowrap">{item.label}</span>}
               </Link>
             )
           })}
         </nav>
 
         {/* User Info */}
-        <div className="p-4 border-t border-border space-y-3">
-          <div className="flex items-center justify-between gap-3 px-2">
-            <div className="overflow-hidden">
-              <p className="text-sm font-semibold text-foreground truncate">
-                {user?.user_metadata?.nome || user?.email?.split('@')[0]}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+        <div className="p-4 border-t border-border">
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={handleLogout}
+                className="p-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+                title="Sair"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-              title="Sair"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 px-2">
+              <div className="overflow-hidden">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {user?.user_metadata?.nome || user?.email?.split('@')[0]}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+                title="Sair"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
