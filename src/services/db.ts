@@ -16,6 +16,7 @@ export interface FiltrosRelatorio {
     categoriaNome: string
     valoresSelecionados: string[] // [] = todos os valores
   }[]
+  tags?: string[]
 }
 
 export interface RelatorioSalvo {

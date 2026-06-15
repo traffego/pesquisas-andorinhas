@@ -15,19 +15,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
 import {
-  BarChart2, FileSpreadsheet, Filter, Plus, X, Save, BookOpen,
+  BarChart2, FileSpreadsheet, Filter, X, Save, BookOpen,
   Trash2, ChevronDown, ChevronUp, Check, Loader2, Tag, Users2,
   FolderGit2, ClipboardList, RefreshCw, Pencil
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6', '#f97316']
-
-// ─── Tipos internos ────────────────────────────────────────────────────────────
-interface CatFiltroAtivo {
-  categoriaId: string
-  categoriaNome: string
-  valoresSelecionados: string[]
-}
 
 // ─── Componente MultiSelect ────────────────────────────────────────────────────
 interface MultiSelectProps {
@@ -135,11 +128,20 @@ export const RelatoriosGlobais: React.FC = () => {
   const [objetoIds, setObjetoIds] = useState<string[]>([])
   const [pesquisaIds, setPesquisaIds] = useState<string[]>([])
   const [liderIds, setLiderIds] = useState<string[]>([])
-  const [categsFiltros, setCategsFiltros] = useState<CatFiltroAtivo[]>([])
 
-  // Resultados
-  const [resultado, setResultado] = useState<any[] | null>(null)
-  const [loadingResult, setLoadingResult] = useState(false)
+  // Filtro de Tags Dinâmico
+  const [tagsFiltro, setTagsFiltro] = useState<string[]>([])
+  const [logicaFiltro, setLogicaFiltro] = useState<'AND' | 'OR'>('AND')
+
+  // Autocomplete UI
+  const [inputValue, setInputValue] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [focusedIndex, setFocusedIndex] = useState(-1)
+
+  // Resultados brutos do banco e carregamento
+  const [respostasBrutas, setRespostasBrutas] = useState<any[]>([])
+  const [loadingRespostas, setLoadingRespostas] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
 
   // UI
   const [showSalvos, setShowSalvos] = useState(false)
@@ -231,23 +233,39 @@ export const RelatoriosGlobais: React.FC = () => {
     dbService.getPerguntasByFluxos(fluxoIds).then(setPerguntas).catch(console.error)
   }, [pesquisaIds, pesquisasFiltradas, getRecursiveFluxoIds])
 
-  // ── Valores disponíveis por categoria ─────────────────────────────────────
-  const valoresPorCategoria = useMemo(() => {
-    const map: Record<string, { id: string; texto: string }[]> = {}
-    perguntas.forEach(p => {
-      const catId = p.categoria_id
-      if (!catId) return
-      if (p.tipo === 'multipla' && p.config?.opcoes) {
-        if (!map[catId]) map[catId] = []
-        p.config.opcoes.forEach(o => {
-          if (!map[catId].find((x: { id: string; texto: string }) => x.id === o.id)) {
-            map[catId].push(o)
-          }
-        })
+  // ── Carrega respostas automaticamente quando as pesquisas mudam ─────────────
+  useEffect(() => {
+    let active = true
+    const carregarRespostas = async () => {
+      const idsAlvo = pesquisaIds.length > 0
+        ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id)).map(p => p.id)
+        : pesquisasFiltradas.map(p => p.id)
+
+      if (idsAlvo.length === 0) {
+        setRespostasBrutas([])
+        return
       }
-    })
-    return map
-  }, [perguntas])
+
+      setLoadingRespostas(true)
+      try {
+        const { respostas } = await dbService.getRelatoriosGlobais(idsAlvo)
+        if (active) {
+          setRespostasBrutas(respostas)
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        if (active) {
+          setLoadingRespostas(false)
+        }
+      }
+    }
+
+    carregarRespostas()
+    return () => {
+      active = false
+    }
+  }, [pesquisaIds, pesquisasFiltradas])
 
   // ── Categorias com perguntas nas pesquisas selecionadas ───────────────────
   const categoriasDisponiveis = useMemo(() => {
@@ -255,70 +273,109 @@ export const RelatoriosGlobais: React.FC = () => {
     return categorias.filter(c => catIds.has(c.id))
   }, [categorias, perguntas])
 
-  // ── Adicionar categoria como filtro ───────────────────────────────────────
-  const adicionarCatFiltro = (cat: CategoriaCampo) => {
-    if (categsFiltros.find(c => c.categoriaId === cat.id)) return
-    setCategsFiltros(prev => [...prev, {
-      categoriaId: cat.id,
-      categoriaNome: cat.nome,
-      valoresSelecionados: []
-    }])
-  }
+  // ── Sugestões disponíveis para autocomplete ────────────────────────────────
+  const sugestoesDisponiveis = useMemo(() => {
+    const termos = new Set<string>()
 
-  const removerCatFiltro = (catId: string) => {
-    setCategsFiltros(prev => prev.filter(c => c.categoriaId !== catId))
-  }
-
-  const setCatValores = (catId: string, valores: string[]) => {
-    setCategsFiltros(prev => prev.map(c =>
-      c.categoriaId === catId ? { ...c, valoresSelecionados: valores } : c
-    ))
-  }
-
-  // ── Buscar resultados ──────────────────────────────────────────────────────
-  const handleBuscar = useCallback(async () => {
-    setLoadingResult(true)
-    try {
-      const idsAlvo = pesquisaIds.length > 0
-        ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id)).map(p => p.id)
-        : pesquisasFiltradas.map(p => p.id)
-
-      if (idsAlvo.length === 0) {
-        setResultado([])
-        return
-      }
-
-      const { respostas } = await dbService.getRelatoriosGlobais(idsAlvo)
-
-      // Aplicar filtro de líder
-      let filtradas = liderIds.length === 0
-        ? respostas
-        : respostas.filter(r => {
-            const pesq = todasPesquisas.find(p => p.id === r.pesquisa_id)
-            return pesq?.lider_id && liderIds.includes(pesq.lider_id)
-          })
-
-      // Aplicar filtros de categoria
-      categsFiltros.forEach(catFiltro => {
-        if (catFiltro.valoresSelecionados.length === 0) return // todos → não filtra
-        const pergsDestaCategoria = perguntas.filter(p => p.categoria_id === catFiltro.categoriaId)
-        filtradas = filtradas.filter(resp => {
-          return pergsDestaCategoria.some(perg => {
-            const val = resp.valores[perg.id]
-            if (!val) return false
-            const arr = Array.isArray(val) ? val : [val]
-            return arr.some((v: string) => catFiltro.valoresSelecionados.includes(v))
-          })
+    // 1. Opções das perguntas de múltipla escolha
+    perguntas.forEach(p => {
+      if (p.tipo === 'multipla' && p.config?.opcoes) {
+        p.config.opcoes.forEach(o => {
+          if (o.texto?.trim()) {
+            termos.add(o.texto.trim())
+          }
         })
-      })
+      }
+    })
 
-      setResultado(filtradas)
+    // 2. Valores das respostas cadastradas
+    respostasBrutas.forEach(r => {
+      perguntas.forEach(p => {
+        const val = r.valores[p.id]
+        if (!val) return
+        if (p.tipo === 'multipla') {
+          const opcoes = p.config?.opcoes || []
+          const arr = Array.isArray(val) ? val : [val]
+          arr.forEach((v: string) => {
+            const texto = opcoes.find(o => o.id === v)?.texto || v
+            if (typeof texto === 'string' && texto.trim()) {
+              termos.add(texto.trim())
+            }
+          })
+        } else if (typeof val === 'string' && val.trim()) {
+          termos.add(val.trim())
+        }
+      })
+    })
+
+    return Array.from(termos).sort((a, b) => a.localeCompare(b))
+  }, [perguntas, respostasBrutas])
+
+  // ── Resultado Filtrado em tempo real ───────────────────────────────────────
+  const resultadoFiltrado = useMemo(() => {
+    // 1. Filtrar por líderes
+    let filtradas = liderIds.length === 0
+      ? respostasBrutas
+      : respostasBrutas.filter(r => {
+          const pesq = todasPesquisas.find(p => p.id === r.pesquisa_id)
+          return pesq?.lider_id && liderIds.includes(pesq.lider_id)
+        })
+
+    // 2. Filtrar por tags
+    if (tagsFiltro.length > 0) {
+      filtradas = filtradas.filter(resp => {
+        const valoresAmigaveis = new Set<string>()
+        perguntas.forEach(p => {
+          const val = resp.valores[p.id]
+          if (!val) return
+          if (p.tipo === 'multipla') {
+            const opcoes = p.config?.opcoes || []
+            const arr = Array.isArray(val) ? val : [val]
+            arr.forEach((v: string) => {
+              const texto = opcoes.find(o => o.id === v)?.texto || v
+              if (typeof texto === 'string') {
+                valoresAmigaveis.add(texto.trim().toLowerCase())
+              }
+            })
+          } else if (typeof val === 'string') {
+            valoresAmigaveis.add(val.trim().toLowerCase())
+          }
+        })
+
+        if (logicaFiltro === 'AND') {
+          return tagsFiltro.every(tag => valoresAmigaveis.has(tag.trim().toLowerCase()))
+        } else {
+          return tagsFiltro.some(tag => valoresAmigaveis.has(tag.trim().toLowerCase()))
+        }
+      })
+    }
+
+    return filtradas
+  }, [respostasBrutas, liderIds, tagsFiltro, logicaFiltro, perguntas, todasPesquisas])
+
+  // ── Buscar resultados (força recarga do banco) ─────────────────────────────
+  const handleBuscar = useCallback(async () => {
+    const idsAlvo = pesquisaIds.length > 0
+      ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id)).map(p => p.id)
+      : pesquisasFiltradas.map(p => p.id)
+
+    if (idsAlvo.length === 0) {
+      setRespostasBrutas([])
+      setHasSearched(true)
+      return
+    }
+
+    setLoadingRespostas(true)
+    try {
+      const { respostas } = await dbService.getRelatoriosGlobais(idsAlvo)
+      setRespostasBrutas(respostas)
+      setHasSearched(true)
     } catch (err) {
       console.error(err)
     } finally {
-      setLoadingResult(false)
+      setLoadingRespostas(false)
     }
-  }, [pesquisaIds, pesquisasFiltradas, liderIds, categsFiltros, perguntas, todasPesquisas])
+  }, [pesquisaIds, pesquisasFiltradas])
 
   // ── Salvar relatório ───────────────────────────────────────────────────────
   const handleSalvar = async (e: React.FormEvent) => {
@@ -330,7 +387,8 @@ export const RelatoriosGlobais: React.FC = () => {
         objetoIds,
         pesquisaIds,
         liderIds,
-        categoriasFiltros: categsFiltros
+        categoriasFiltros: [],
+        tags: tagsFiltro
       }
       await dbService.saveRelatorioSalvo({
         id: editandoRelId,
@@ -370,9 +428,26 @@ export const RelatoriosGlobais: React.FC = () => {
     setObjetoIds(f.objetoIds || [])
     setPesquisaIds(f.pesquisaIds || [])
     setLiderIds(f.liderIds || [])
-    setCategsFiltros(f.categoriasFiltros || [])
+    
+    // Suporte a tags e compatibilidade legada
+    let tagsCarregadas: string[] = []
+    if (Array.isArray(f.tags)) {
+      tagsCarregadas = [...f.tags]
+    } else if (Array.isArray(f.categoriasFiltros)) {
+      // Converte valores selecionados das categorias antigas em tags
+      f.categoriasFiltros.forEach(cf => {
+        if (Array.isArray(cf.valoresSelecionados)) {
+          cf.valoresSelecionados.forEach(v => {
+            if (v && !tagsCarregadas.includes(v)) {
+              tagsCarregadas.push(v)
+            }
+          })
+        }
+      })
+    }
+    
+    setTagsFiltro(tagsCarregadas)
     setShowSalvos(false)
-    setResultado(null)
   }
 
   const handleDeleteRelatorio = async (id: string) => {
@@ -383,8 +458,8 @@ export const RelatoriosGlobais: React.FC = () => {
 
   // ── Exportar Excel ─────────────────────────────────────────────────────────
   const handleExportExcel = () => {
-    if (!resultado || resultado.length === 0) return
-    const rows = resultado.map(r => {
+    if (!resultadoFiltrado || resultadoFiltrado.length === 0) return
+    const rows = resultadoFiltrado.map(r => {
       const row: Record<string, any> = {
         'Pesquisa': r.pesquisa_titulo,
         'Objeto': r.objeto_nome || '-',
@@ -411,16 +486,16 @@ export const RelatoriosGlobais: React.FC = () => {
   }
 
   // ── Gráfico por categoria ──────────────────────────────────────────────────
-  const getGraficoCat = (catFiltro: CatFiltroAtivo) => {
-    if (!resultado) return []
-    const pergsDestaCategoria = perguntas.filter(p => p.categoria_id === catFiltro.categoriaId && p.tipo === 'multipla')
+  const getGraficoCat = (catId: string) => {
+    if (!resultadoFiltrado) return []
+    const pergsDestaCategoria = perguntas.filter(p => p.categoria_id === catId && p.tipo === 'multipla')
     const contagem: Record<string, { nome: string; quantidade: number }> = {}
     pergsDestaCategoria.forEach(p => {
       p.config?.opcoes?.forEach(o => {
         if (!contagem[o.id]) contagem[o.id] = { nome: o.texto, quantidade: 0 }
       })
     })
-    resultado.forEach(resp => {
+    resultadoFiltrado.forEach(resp => {
       pergsDestaCategoria.forEach(p => {
         const val = resp.valores[p.id]
         if (!val) return
@@ -441,10 +516,6 @@ export const RelatoriosGlobais: React.FC = () => {
       </div>
     )
   }
-
-  const categoriasNaoAdicionadas = categoriasDisponiveis.filter(
-    c => !categsFiltros.find(cf => cf.categoriaId === c.id)
-  )
 
   return (
     <div className="space-y-6 animate-fade-in text-foreground max-w-[1400px] mx-auto">
@@ -547,133 +618,189 @@ export const RelatoriosGlobais: React.FC = () => {
             selected={liderIds}
             onChange={setLiderIds}
           />
-
           {/* Separador */}
           <div className="border-t border-border/60" />
 
-          {/* Filtros dinâmicos por categoria */}
-          <div>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Tag className="h-3 w-3" />Filtros por Categoria
-            </p>
-
-            <div className="space-y-4">
-              {categsFiltros.map(cf => {
-                const opcoes = valoresPorCategoria[cf.categoriaId] || []
-                return (
-                  <div key={cf.categoriaId} className="rounded-xl border border-border/60 bg-background/40 p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-primary">{cf.categoriaNome}</p>
-                      <button onClick={() => removerCatFiltro(cf.categoriaId)} className="p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    {opcoes.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground italic">Sem valores disponíveis (selecione pesquisas)</p>
-                    ) : (
-                      <div className="space-y-1 max-h-32 overflow-y-auto pr-0.5">
-                        {/* Todos */}
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            checked={cf.valoresSelecionados.length === 0}
-                            onChange={() => setCatValores(cf.categoriaId, [])}
-                            className="rounded border-border text-primary bg-background focus:ring-primary focus:ring-offset-background h-3.5 w-3.5"
-                          />
-                          <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">Todos</span>
-                        </label>
-                        {opcoes.map(o => (
-                          <label key={o.id} className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              checked={cf.valoresSelecionados.includes(o.id)}
-                              onChange={() => {
-                                const next = cf.valoresSelecionados.includes(o.id)
-                                  ? cf.valoresSelecionados.filter(v => v !== o.id)
-                                  : [...cf.valoresSelecionados, o.id]
-                                setCatValores(cf.categoriaId, next)
-                              }}
-                              className="rounded border-border text-primary bg-background focus:ring-primary focus:ring-offset-background h-3.5 w-3.5"
-                            />
-                            <span className="text-xs text-foreground/80 group-hover:text-foreground transition-colors truncate">{o.texto}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {/* Adicionar categoria */}
-              {categoriasNaoAdicionadas.length > 0 && (
-                <div className="relative group/add">
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/60 py-2 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all cursor-pointer"
-                  >
-                    <Plus className="h-3 w-3" />
-                    Adicionar Categoria
-                  </button>
-                  <div className="absolute z-20 bottom-full mb-1 left-0 right-0 hidden group-hover/add:block rounded-xl border border-border bg-card shadow-xl overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto">
-                      {categoriasNaoAdicionadas.map(cat => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => adicionarCatFiltro(cat)}
-                          className="w-full text-left px-3 py-2.5 text-sm text-foreground hover:bg-muted hover:text-primary transition-colors flex items-center gap-2"
-                        >
-                          <Tag className="h-3 w-3 text-primary/70" />
-                          {cat.nome}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {categoriasDisponiveis.length === 0 && (
-                <p className="text-[10px] text-muted-foreground/60 italic text-center py-2">
-                  Selecione pesquisas com campos categorizados
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Botão buscar */}
+          {/* Botão atualizar dados */}
           <button
             onClick={handleBuscar}
-            disabled={loadingResult}
+            disabled={loadingRespostas}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
           >
-            {loadingResult
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</>
-              : <><RefreshCw className="h-4 w-4" /> Aplicar Filtros</>
-            }
+            {loadingRespostas ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Buscando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" /> Atualizar Dados
+              </>
+            )}
           </button>
         </aside>
-
         {/* ── Área de Resultados ── */}
         <div className="flex-1 min-w-0 space-y-6">
-          {resultado === null ? (
+          {respostasBrutas.length === 0 && loadingRespostas && !hasSearched ? (
             <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-border bg-card/30 text-center gap-4">
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <p className="text-muted-foreground font-medium">Buscando respostas no banco...</p>
+            </div>
+          ) : respostasBrutas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-border bg-card/30 text-center gap-4 animate-fade-in">
               <BarChart2 className="h-14 w-14 text-muted-foreground/30" />
               <div>
-                <h3 className="font-bold text-muted-foreground">Configure os filtros e clique em Aplicar</h3>
+                <h3 className="font-bold text-muted-foreground">Nenhuma resposta cadastrada</h3>
                 <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs mx-auto">
-                  Use a barra lateral para selecionar objetos, pesquisas, líderes e categorias.
+                  Não existem respostas registradas no banco para as pesquisas selecionadas no escopo.
                 </p>
               </div>
             </div>
           ) : (
             <>
+              {/* Barra de Busca Dinâmica por Tags (Autocomplete) */}
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3 relative">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-primary" />
+                    <h3 className="font-bold text-sm text-foreground">Filtro por Tags / Termos</h3>
+                  </div>
+                  {/* Seletor de Lógica */}
+                  <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-lg border border-border self-start sm:self-auto">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase px-2">Lógica:</span>
+                    <button
+                      type="button"
+                      onClick={() => setLogicaFiltro('AND')}
+                      className={`text-xs font-bold px-2 py-1 rounded transition-colors ${logicaFiltro === 'AND' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      E (AND)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogicaFiltro('OR')}
+                      className={`text-xs font-bold px-2 py-1 rounded transition-colors ${logicaFiltro === 'OR' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      OU (OR)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Container do Input de Tags */}
+                <div className="relative">
+                  <div className="w-full flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all min-h-[46px]">
+                    {tagsFiltro.map(tag => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 text-xs font-bold pl-2.5 pr-1.5 py-1 rounded-lg"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => setTagsFiltro(prev => prev.filter(t => t !== tag))}
+                          className="hover:bg-primary/20 rounded-md p-0.5 text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+
+                    <input
+                      type="text"
+                      value={inputValue}
+                      onChange={e => {
+                        setInputValue(e.target.value)
+                        setShowSuggestions(true)
+                        setFocusedIndex(-1)
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => {
+                        setTimeout(() => setShowSuggestions(false), 200)
+                      }}
+                      onKeyDown={e => {
+                        const filteredSugs = sugestoesDisponiveis.filter(
+                          s => s.toLowerCase().includes(inputValue.toLowerCase()) && !tagsFiltro.includes(s)
+                        )
+
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setFocusedIndex(prev => Math.min(prev + 1, filteredSugs.length - 1))
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setFocusedIndex(prev => Math.max(prev - 1, -1))
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (focusedIndex >= 0 && focusedIndex < filteredSugs.length) {
+                            const selected = filteredSugs[focusedIndex]
+                            if (!tagsFiltro.includes(selected)) {
+                              setTagsFiltro(prev => [...prev, selected])
+                            }
+                            setInputValue('')
+                            setFocusedIndex(-1)
+                          } else if (inputValue.trim()) {
+                            const val = inputValue.trim()
+                            if (!tagsFiltro.includes(val)) {
+                              setTagsFiltro(prev => [...prev, val])
+                            }
+                            setInputValue('')
+                          }
+                        } else if (e.key === ',' || e.key === ';') {
+                          e.preventDefault()
+                          if (inputValue.trim()) {
+                            const val = inputValue.trim()
+                            if (!tagsFiltro.includes(val)) {
+                              setTagsFiltro(prev => [...prev, val])
+                            }
+                            setInputValue('')
+                          }
+                        } else if (e.key === 'Backspace' && !inputValue && tagsFiltro.length > 0) {
+                          setTagsFiltro(prev => prev.slice(0, -1))
+                        }
+                      }}
+                      placeholder={tagsFiltro.length === 0 ? "Digite termos ou escolha sugestões..." : "Adicionar tag..."}
+                      className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground focus:ring-0 placeholder-muted-foreground min-w-[150px] py-1"
+                    />
+                  </div>
+
+                  {/* Dropdown de Sugestões */}
+                  {showSuggestions && (
+                    (() => {
+                      const filteredSugs = sugestoesDisponiveis.filter(
+                        s => s.toLowerCase().includes(inputValue.toLowerCase()) && !tagsFiltro.includes(s)
+                      )
+
+                      if (filteredSugs.length === 0) return null
+
+                      return (
+                        <div className="absolute z-50 w-full mt-1.5 rounded-xl border border-border bg-card shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                          {filteredSugs.map((sug, idx) => (
+                            <button
+                              key={sug}
+                              type="button"
+                              onMouseDown={() => {
+                                if (!tagsFiltro.includes(sug)) {
+                                  setTagsFiltro(prev => [...prev, sug])
+                                }
+                                setInputValue('')
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${idx === focusedIndex ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-foreground'}`}
+                            >
+                              <span>{sug}</span>
+                              <span className="text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded font-mono">Click / Enter</span>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()
+                  )}
+                </div>
+              </div>
+
               {/* Cabeçalho resultados */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-extrabold text-foreground">{resultado.length}</p>
+                  <p className="text-2xl font-extrabold text-foreground">{resultadoFiltrado.length}</p>
                   <p className="text-xs text-muted-foreground font-medium">respostas encontradas</p>
                 </div>
-                {resultado.length > 0 && (
+                {resultadoFiltrado.length > 0 && (
                   <button
                     onClick={handleExportExcel}
                     className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 transition-all cursor-pointer"
@@ -684,7 +811,7 @@ export const RelatoriosGlobais: React.FC = () => {
                 )}
               </div>
 
-              {resultado.length === 0 ? (
+              {resultadoFiltrado.length === 0 ? (
                 <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-card/30">
                   <BarChart2 className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="font-semibold text-muted-foreground">Nenhuma resposta para os filtros aplicados</p>
@@ -692,16 +819,16 @@ export const RelatoriosGlobais: React.FC = () => {
               ) : (
                 <>
                   {/* Gráficos por categoria ativa */}
-                  {categsFiltros.length > 0 && (
+                  {categoriasDisponiveis.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      {categsFiltros.map(cf => {
-                        const dados = getGraficoCat(cf)
+                      {categoriasDisponiveis.map(cat => {
+                        const dados = getGraficoCat(cat.id)
                         if (dados.length === 0) return null
                         return (
-                          <div key={cf.categoriaId} className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
+                          <div key={cat.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
                             <div className="flex items-center gap-2">
                               <Tag className="h-3.5 w-3.5 text-primary" />
-                              <p className="text-xs font-bold text-primary uppercase tracking-wider">{cf.categoriaNome}</p>
+                              <p className="text-xs font-bold text-primary uppercase tracking-wider">{cat.nome}</p>
                             </div>
                             <div className="h-52">
                               <ResponsiveContainer width="100%" height="100%">
@@ -726,7 +853,7 @@ export const RelatoriosGlobais: React.FC = () => {
                   )}
 
                   {/* Tabela */}
-                  <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden animate-fade-in">
                     <div className="px-5 py-4 border-b border-border flex items-center gap-2">
                       <ClipboardList className="h-4 w-4 text-primary" />
                       <h3 className="font-bold text-sm text-foreground">Respostas Individuais</h3>
@@ -739,13 +866,13 @@ export const RelatoriosGlobais: React.FC = () => {
                             <th className="p-3 whitespace-nowrap">Pesquisa</th>
                             <th className="p-3 whitespace-nowrap">Objeto</th>
                             <th className="p-3 whitespace-nowrap">Líder</th>
-                            {categsFiltros.map(cf => (
-                              <th key={cf.categoriaId} className="p-3 whitespace-nowrap text-primary">{cf.categoriaNome}</th>
+                            {categoriasDisponiveis.map(cat => (
+                              <th key={cat.id} className="p-3 whitespace-nowrap text-primary">{cat.nome}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {resultado.map(r => (
+                          {resultadoFiltrado.map(r => (
                             <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                               <td className="p-3 pl-5 text-xs text-muted-foreground whitespace-nowrap">
                                 {new Date(r.created_at).toLocaleString('pt-BR')}
@@ -753,8 +880,8 @@ export const RelatoriosGlobais: React.FC = () => {
                               <td className="p-3 text-xs font-semibold text-foreground max-w-[180px] truncate">{r.pesquisa_titulo}</td>
                               <td className="p-3 text-xs text-muted-foreground">{r.objeto_nome || '-'}</td>
                               <td className="p-3 text-xs text-muted-foreground">{r.lider_nome || '-'}</td>
-                              {categsFiltros.map(cf => {
-                                const pergsDestaCategoria = perguntas.filter(p => p.categoria_id === cf.categoriaId)
+                              {categoriasDisponiveis.map(cat => {
+                                const pergsDestaCategoria = perguntas.filter(p => p.categoria_id === cat.id)
                                 const valores: string[] = []
                                 pergsDestaCategoria.forEach(p => {
                                   const val = r.valores[p.id]
@@ -766,7 +893,7 @@ export const RelatoriosGlobais: React.FC = () => {
                                   })
                                 })
                                 return (
-                                  <td key={cf.categoriaId} className="p-3">
+                                  <td key={cat.id} className="p-3">
                                     {valores.length === 0
                                       ? <span className="text-muted-foreground/50 text-xs">-</span>
                                       : (
