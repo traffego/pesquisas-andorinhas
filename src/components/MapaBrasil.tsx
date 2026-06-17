@@ -77,18 +77,10 @@ export const MapaBrasil: React.FC<Props> = ({ respostas, perguntas, titulo }) =>
     )
   }
 
-  const temDados = Object.keys(contagem).length > 0
-
   return (
     <div className="relative w-full">
       {titulo && (
         <h3 className="text-base font-semibold text-foreground mb-3">{titulo}</h3>
-      )}
-
-      {!temDados && (
-        <p className="text-center text-sm text-muted-foreground mb-2">
-          Nenhuma resposta com campo de estado encontrada.
-        </p>
       )}
 
       <div className="relative border border-border rounded-xl overflow-hidden bg-card/30">

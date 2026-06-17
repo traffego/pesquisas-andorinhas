@@ -653,15 +653,14 @@ export const RelatoriosGlobais: React.FC = () => {
               ) : (
                 <>
                   {/* Mapa Territorial */}
-                  {perguntas.some(p => p.tipo === 'estado') && (
-                    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Tag className="h-3.5 w-3.5 text-primary" />
-                        <p className="text-xs font-bold text-primary uppercase tracking-wider">Distribuição Territorial</p>
-                      </div>
-                      <MapaBrasil respostas={resultadoFiltrado} perguntas={perguntas} />
+                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs font-bold text-primary uppercase tracking-wider">Distribuição Territorial</p>
                     </div>
-                  )}
+                    <MapaBrasil respostas={resultadoFiltrado} perguntas={perguntas} />
+                  </div>
+
 
                   {/* Gráficos por categoria ativa */}
                   {categoriasDisponiveis.length > 0 && (
