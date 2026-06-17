@@ -16,6 +16,7 @@ import {
   BarChart2, FileSpreadsheet, Filter, X, Save, BookOpen,
   Trash2, Check, Loader2, Tag, ClipboardList, RefreshCw, Pencil
 } from 'lucide-react'
+import { MapaBrasil } from '../../components/MapaBrasil'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6', '#f97316']
 
@@ -651,6 +652,17 @@ export const RelatoriosGlobais: React.FC = () => {
                 </div>
               ) : (
                 <>
+                  {/* Mapa Territorial */}
+                  {perguntas.some(p => p.tipo === 'estado') && (
+                    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-3.5 w-3.5 text-primary" />
+                        <p className="text-xs font-bold text-primary uppercase tracking-wider">Distribuição Territorial</p>
+                      </div>
+                      <MapaBrasil respostas={resultadoFiltrado} perguntas={perguntas} />
+                    </div>
+                  )}
+
                   {/* Gráficos por categoria ativa */}
                   {categoriasDisponiveis.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

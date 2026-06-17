@@ -13,6 +13,7 @@ import {
   Moon,
   GitFork,
   BarChart2,
+  Map,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
@@ -43,6 +44,7 @@ export const AdminLayout: React.FC = () => {
     { label: 'Fluxos', path: '/admin/fluxos', icon: GitFork },
     { label: 'Pesquisas', path: '/admin/pesquisas', icon: ClipboardList },
     { label: 'Relatórios', path: '/admin/relatorios', icon: BarChart2 },
+    { label: 'Territorial', path: '/admin/territorial', icon: Map },
   ]
 
   const isActive = (path: string) => location.pathname === path
