@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   dbService,
-  type Objeto,
   type Pesquisa,
-  type Lider,
   type Pergunta,
   type CategoriaCampo,
   type FiltrosRelatorio,
@@ -16,118 +14,20 @@ import {
 } from 'recharts'
 import {
   BarChart2, FileSpreadsheet, Filter, X, Save, BookOpen,
-  Trash2, ChevronDown, ChevronUp, Check, Loader2, Tag, Users2,
-  FolderGit2, ClipboardList, RefreshCw, Pencil
+  Trash2, Check, Loader2, Tag, ClipboardList, RefreshCw, Pencil
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6', '#f97316']
 
-// ─── Componente MultiSelect ────────────────────────────────────────────────────
-interface MultiSelectProps {
-  label: string
-  icon: React.ReactNode
-  items: { id: string; label: string }[]
-  selected: string[]
-  onChange: (ids: string[]) => void
-}
-
-const MultiSelect: React.FC<MultiSelectProps> = ({ label, icon, items, selected, onChange }) => {
-  const [open, setOpen] = useState(false)
-  const allSelected = selected.length === 0
-
-  const toggle = (id: string) => {
-    if (selected.includes(id)) {
-      const next = selected.filter(s => s !== id)
-      onChange(next)
-    } else {
-      onChange([...selected, id])
-    }
-  }
-
-  const displayLabel = allSelected
-    ? 'Todos'
-    : selected.length === 1
-      ? items.find(i => i.id === selected[0])?.label || '1 selecionado'
-      : `${selected.length} selecionados`
-
-  return (
-    <div className="relative">
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-        {icon}{label}
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground hover:border-primary/50 transition-colors"
-      >
-        <span className={allSelected ? 'text-muted-foreground' : 'font-semibold'}>{displayLabel}</span>
-        {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-      </button>
-
-      {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-xl border border-border bg-card shadow-xl overflow-hidden">
-          <div className="max-h-52 overflow-y-auto">
-            {/* Opção "Todos" */}
-            <button
-              type="button"
-              onClick={() => { onChange([]); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors text-left ${allSelected ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-foreground'}`}
-            >
-              {allSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
-              {!allSelected && <span className="w-3.5" />}
-              Todos
-            </button>
-            {items.length === 0 && (
-              <p className="px-3 py-3 text-xs text-muted-foreground italic">Nenhum item disponível</p>
-            )}
-            {items.map(item => {
-              const isSelected = selected.includes(item.id)
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toggle(item.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${isSelected ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-foreground'}`}
-                >
-                  {isSelected ? <Check className="h-3.5 w-3.5 shrink-0" /> : <span className="w-3.5" />}
-                  {item.label}
-                </button>
-              )
-            })}
-          </div>
-          {items.length > 0 && (
-            <div className="border-t border-border px-3 py-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="text-xs font-bold text-primary hover:opacity-80 transition-opacity"
-              >
-                Fechar
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Página Principal ─────────────────────────────────────────────────────────
 export const RelatoriosGlobais: React.FC = () => {
   // Dados base
-  const [objetos, setObjetos] = useState<Objeto[]>([])
   const [todasPesquisas, setTodasPesquisas] = useState<Pesquisa[]>([])
-  const [lideres, setLideres] = useState<Lider[]>([])
   const [categorias, setCategorias] = useState<CategoriaCampo[]>([])
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [relatoriosSalvos, setRelatoriosSalvos] = useState<RelatorioSalvo[]>([])
   const [todosFluxos, setTodosFluxos] = useState<Fluxo[]>([])
   const [loadingBase, setLoadingBase] = useState(true)
-
-  // Filtros ativos
-  const [objetoIds, setObjetoIds] = useState<string[]>([])
-  const [pesquisaIds, setPesquisaIds] = useState<string[]>([])
-  const [liderIds, setLiderIds] = useState<string[]>([])
 
   // Filtro de Tags Dinâmico
   const [tagsFiltro, setTagsFiltro] = useState<string[]>([])
@@ -156,17 +56,13 @@ export const RelatoriosGlobais: React.FC = () => {
     ;(async () => {
       setLoadingBase(true)
       try {
-        const [objs, pesqs, lids, cats, rels, fluxos] = await Promise.all([
-          dbService.getObjetos(),
+        const [pesqs, cats, rels, fluxos] = await Promise.all([
           dbService.getPesquisas(),
-          dbService.getLideres(),
           dbService.getCategorias(),
           dbService.getRelatoriosSalvos(),
           dbService.getFluxos()
         ])
-        setObjetos(objs)
         setTodasPesquisas(pesqs)
-        setLideres(lids)
         setCategorias(cats)
         setRelatoriosSalvos(rels)
         setTodosFluxos(fluxos)
@@ -177,18 +73,6 @@ export const RelatoriosGlobais: React.FC = () => {
       }
     })()
   }, [])
-
-  // ── Pesquisas filtradas por objeto ─────────────────────────────────────────
-  const pesquisasFiltradas = useMemo(() => {
-    if (objetoIds.length === 0) return todasPesquisas
-    return todasPesquisas.filter(p => p.objeto_id && objetoIds.includes(p.objeto_id))
-  }, [todasPesquisas, objetoIds])
-
-  // Quando objeto muda, limpa pesquisas que ficaram fora do escopo
-  useEffect(() => {
-    const validIds = pesquisasFiltradas.map(p => p.id)
-    setPesquisaIds(prev => prev.filter(id => validIds.includes(id)))
-  }, [pesquisasFiltradas])
 
   // Encontra recursivamente todos os subfluxos de um conjunto de fluxos
   const getRecursiveFluxoIds = useCallback((initialIds: string[]): string[] => {
@@ -216,13 +100,14 @@ export const RelatoriosGlobais: React.FC = () => {
     return Array.from(visited)
   }, [todosFluxos])
 
-  // ── Carrega perguntas quando pesquisas mudam ────────────────────────────────
+  // ── Carrega perguntas de todos os fluxos das pesquisas ──────────────────────
   useEffect(() => {
-    const idsAlvo = pesquisaIds.length > 0
-      ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id))
-      : pesquisasFiltradas
+    if (todasPesquisas.length === 0) {
+      setPerguntas([])
+      return
+    }
 
-    const mainFluxoIds = [...new Set(idsAlvo.map(p => p.fluxo_id).filter(Boolean) as string[])]
+    const mainFluxoIds = [...new Set(todasPesquisas.map(p => p.fluxo_id).filter(Boolean) as string[])]
     const fluxoIds = getRecursiveFluxoIds(mainFluxoIds)
 
     if (fluxoIds.length === 0) {
@@ -231,26 +116,25 @@ export const RelatoriosGlobais: React.FC = () => {
     }
 
     dbService.getPerguntasByFluxos(fluxoIds).then(setPerguntas).catch(console.error)
-  }, [pesquisaIds, pesquisasFiltradas, getRecursiveFluxoIds])
+  }, [todasPesquisas, getRecursiveFluxoIds])
 
-  // ── Carrega respostas automaticamente quando as pesquisas mudam ─────────────
+  // ── Carrega respostas automaticamente de todas as pesquisas ──────────────────
   useEffect(() => {
     let active = true
     const carregarRespostas = async () => {
-      const idsAlvo = pesquisaIds.length > 0
-        ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id)).map(p => p.id)
-        : pesquisasFiltradas.map(p => p.id)
-
-      if (idsAlvo.length === 0) {
+      if (todasPesquisas.length === 0) {
         setRespostasBrutas([])
         return
       }
+
+      const idsAlvo = todasPesquisas.map(p => p.id)
 
       setLoadingRespostas(true)
       try {
         const { respostas } = await dbService.getRelatoriosGlobais(idsAlvo)
         if (active) {
           setRespostasBrutas(respostas)
+          setHasSearched(true)
         }
       } catch (err) {
         console.error(err)
@@ -265,7 +149,7 @@ export const RelatoriosGlobais: React.FC = () => {
     return () => {
       active = false
     }
-  }, [pesquisaIds, pesquisasFiltradas])
+  }, [todasPesquisas])
 
   // ── Categorias com perguntas nas pesquisas selecionadas ───────────────────
   const categoriasDisponiveis = useMemo(() => {
@@ -313,15 +197,9 @@ export const RelatoriosGlobais: React.FC = () => {
 
   // ── Resultado Filtrado em tempo real ───────────────────────────────────────
   const resultadoFiltrado = useMemo(() => {
-    // 1. Filtrar por líderes
-    let filtradas = liderIds.length === 0
-      ? respostasBrutas
-      : respostasBrutas.filter(r => {
-          const pesq = todasPesquisas.find(p => p.id === r.pesquisa_id)
-          return pesq?.lider_id && liderIds.includes(pesq.lider_id)
-        })
+    let filtradas = respostasBrutas
 
-    // 2. Filtrar por tags
+    // Filtrar por tags
     if (tagsFiltro.length > 0) {
       filtradas = filtradas.filter(resp => {
         const valoresAmigaveis = new Set<string>()
@@ -351,13 +229,11 @@ export const RelatoriosGlobais: React.FC = () => {
     }
 
     return filtradas
-  }, [respostasBrutas, liderIds, tagsFiltro, logicaFiltro, perguntas, todasPesquisas])
+  }, [respostasBrutas, tagsFiltro, logicaFiltro, perguntas])
 
   // ── Buscar resultados (força recarga do banco) ─────────────────────────────
   const handleBuscar = useCallback(async () => {
-    const idsAlvo = pesquisaIds.length > 0
-      ? pesquisasFiltradas.filter(p => pesquisaIds.includes(p.id)).map(p => p.id)
-      : pesquisasFiltradas.map(p => p.id)
+    const idsAlvo = todasPesquisas.map(p => p.id)
 
     if (idsAlvo.length === 0) {
       setRespostasBrutas([])
@@ -375,7 +251,7 @@ export const RelatoriosGlobais: React.FC = () => {
     } finally {
       setLoadingRespostas(false)
     }
-  }, [pesquisaIds, pesquisasFiltradas])
+  }, [todasPesquisas])
 
   // ── Salvar relatório ───────────────────────────────────────────────────────
   const handleSalvar = async (e: React.FormEvent) => {
@@ -384,9 +260,9 @@ export const RelatoriosGlobais: React.FC = () => {
     setSaving(true)
     try {
       const filtros: FiltrosRelatorio = {
-        objetoIds,
-        pesquisaIds,
-        liderIds,
+        objetoIds: [],
+        pesquisaIds: [],
+        liderIds: [],
         categoriasFiltros: [],
         tags: tagsFiltro
       }
@@ -425,9 +301,6 @@ export const RelatoriosGlobais: React.FC = () => {
   // ── Carregar relatório salvo ───────────────────────────────────────────────
   const carregarRelatorio = (rel: RelatorioSalvo) => {
     const f = rel.filtros
-    setObjetoIds(f.objetoIds || [])
-    setPesquisaIds(f.pesquisaIds || [])
-    setLiderIds(f.liderIds || [])
     
     // Suporte a tags e compatibilidade legada
     let tagsCarregadas: string[] = []
@@ -573,6 +446,20 @@ export const RelatoriosGlobais: React.FC = () => {
             )}
           </div>
 
+          {/* Atualizar Dados */}
+          <button
+            onClick={handleBuscar}
+            disabled={loadingRespostas}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer disabled:opacity-60"
+          >
+            {loadingRespostas ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : (
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            )}
+            Atualizar
+          </button>
+
           {/* Salvar Atual */}
           <button
             onClick={() => abrirModalSalvar()}
@@ -584,62 +471,8 @@ export const RelatoriosGlobais: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-6 items-start">
-        {/* ── Sidebar de Filtros ── */}
-        <aside className="w-72 shrink-0 space-y-5 rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-5 sticky top-6">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-bold text-foreground">Filtros</h2>
-          </div>
-
-          {/* Objeto */}
-          <MultiSelect
-            label="Objeto"
-            icon={<FolderGit2 className="h-3 w-3" />}
-            items={objetos.map(o => ({ id: o.id, label: `${o.tipo === 'projeto' ? '📁' : '📅'} ${o.nome}` }))}
-            selected={objetoIds}
-            onChange={setObjetoIds}
-          />
-
-          {/* Pesquisa */}
-          <MultiSelect
-            label="Pesquisa"
-            icon={<ClipboardList className="h-3 w-3" />}
-            items={pesquisasFiltradas.map(p => ({ id: p.id, label: p.titulo }))}
-            selected={pesquisaIds}
-            onChange={setPesquisaIds}
-          />
-
-          {/* Líder */}
-          <MultiSelect
-            label="Líder"
-            icon={<Users2 className="h-3 w-3" />}
-            items={lideres.map(l => ({ id: l.id, label: l.nome }))}
-            selected={liderIds}
-            onChange={setLiderIds}
-          />
-          {/* Separador */}
-          <div className="border-t border-border/60" />
-
-          {/* Botão atualizar dados */}
-          <button
-            onClick={handleBuscar}
-            disabled={loadingRespostas}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
-          >
-            {loadingRespostas ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Buscando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" /> Atualizar Dados
-              </>
-            )}
-          </button>
-        </aside>
-        {/* ── Área de Resultados ── */}
-        <div className="flex-1 min-w-0 space-y-6">
+      {/* ── Área de Resultados ── */}
+      <div className="space-y-6">
           {respostasBrutas.length === 0 && loadingRespostas && !hasSearched ? (
             <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-border bg-card/30 text-center gap-4">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
@@ -918,7 +751,6 @@ export const RelatoriosGlobais: React.FC = () => {
             </>
           )}
         </div>
-      </div>
 
       {/* ── Modal Salvar Relatório ── */}
       {modalSalvar && (
