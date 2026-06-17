@@ -635,15 +635,24 @@ export const RelatoriosGlobais: React.FC = () => {
                   <p className="text-2xl font-extrabold text-foreground">{resultadoFiltrado.length}</p>
                   <p className="text-xs text-muted-foreground font-medium">respostas encontradas</p>
                 </div>
-                {resultadoFiltrado.length > 0 && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={handleExportExcel}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 transition-all cursor-pointer"
+                    onClick={() => setShowMapaModal(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
                   >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Exportar Excel
+                    <Map className="h-4 w-4 text-primary" />
+                    Ver Mapa Territorial
                   </button>
-                )}
+                  {resultadoFiltrado.length > 0 && (
+                    <button
+                      onClick={handleExportExcel}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 transition-all cursor-pointer"
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Exportar Excel
+                    </button>
+                  )}
+                </div>
               </div>
 
               {resultadoFiltrado.length === 0 ? (
@@ -653,16 +662,6 @@ export const RelatoriosGlobais: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  {/* Botão Mapa Territorial */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setShowMapaModal(true)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
-                    >
-                      <Map className="h-4 w-4 text-primary" />
-                      Ver Mapa Territorial
-                    </button>
-                  </div>
 
 
                   {/* Gráficos por categoria ativa */}
