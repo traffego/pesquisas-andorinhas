@@ -68,7 +68,7 @@ export const MapaBrasil: React.FC<Props> = ({ respostas, perguntas, titulo, onEs
     setLoadingGeo(true)
     const url = escopo === 'brasil'
       ? GEO_URL
-      : `https://servicodados.ibge.gov.br/api/v3/malhas/estados/${escopo}/municipios?formato=application/vnd.geo+json&qualidade=1`
+      : `https://servicodados.ibge.gov.br/api/v3/malhas/estados/${escopo}?formato=application/vnd.geo+json&intragranularidade=municipio`
 
     fetch(url)
       .then(r => r.json())
