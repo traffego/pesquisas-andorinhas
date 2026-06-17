@@ -84,11 +84,11 @@ export const Responder: React.FC = () => {
     if (token) {
       const fp = getDeviceFingerprint()
       setDeviceFp(fp)
-      loadFlow(token, fp)
+      loadFlow(token)
     }
   }, [token, searchParams])
 
-  const loadFlow = async (tk: string, fp: string) => {
+  const loadFlow = async (tk: string) => {
     setLoading(true)
     try {
       let pesq: Pesquisa | null = null
@@ -152,13 +152,7 @@ export const Responder: React.FC = () => {
           }
         }
 
-        // 2. Prevenção de duplicados
-        const jaRespondeu = await dbService.hasDeviceResponded(realPesq.id, fp)
-        if (jaRespondeu) {
-          setRespondeu(true)
-          setLoading(false)
-          return
-        }
+
 
         // 3. Carrega perguntas
         if (!realPesq.fluxo_id) {
@@ -977,8 +971,7 @@ export const Responder: React.FC = () => {
       setSubflowStack([])
       setTodasPerguntasSession([])
       setCurrentNodeId('start')
-      const fp = getDeviceFingerprint()
-      loadFlow(token!, fp)
+      loadFlow(token!)
     }
 
     return (
