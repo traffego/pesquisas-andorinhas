@@ -49,6 +49,11 @@ export const Responder: React.FC = () => {
   const [objetoRelacionado, setObjetoRelacionado] = useState<Objeto | null>(null)
   const [liderRelacionado, setLiderRelacionado] = useState<Lider | null>(null)
 
+  // Estados para carregamento dinâmico de cidades
+  const [cidadesPorEstado, setCidadesPorEstado] = useState<Record<string, string[]>>({})
+  const [loadingCidades, setLoadingCidades] = useState<Record<string, boolean>>({})
+  const [lastEstado, setLastEstado] = useState('')
+
   interface SubflowState {
     pesquisa: Pesquisa & { fluxo?: Fluxo }
     flowData: any
@@ -250,6 +255,67 @@ export const Responder: React.FC = () => {
       setValidacaoErro('')
     }
   }, [currentNodeId, perguntaAtual, isBlock, flowData, blockPerguntas])
+
+  // Encontra o estado selecionado atual
+  const getEstadoSelecionado = () => {
+    if (isBlock) {
+      const estadoPerg = blockPerguntas.find(p => p.tipo === 'estado')
+      if (estadoPerg && valorAtual?.[estadoPerg.id]) {
+        return valorAtual[estadoPerg.id]
+      }
+    }
+    const todasPerguntas = todasPerguntasSession.length > 0 ? todasPerguntasSession : perguntas
+    const estadoPerg = todasPerguntas.find(p => p.tipo === 'estado')
+    if (estadoPerg && respostasAcumuladas?.[estadoPerg.id]) {
+      return respostasAcumuladas[estadoPerg.id]
+    }
+    return ''
+  }
+
+  const estadoSelecionado = getEstadoSelecionado()
+
+  // Monitora mudança de estado e limpa cidade se houver
+  useEffect(() => {
+    if (estadoSelecionado && lastEstado && estadoSelecionado !== lastEstado) {
+      if (isBlock) {
+        setValorAtual((prev: any) => {
+          const updated = { ...prev }
+          const cidadePerg = blockPerguntas.find(p => p.tipo === 'cidade')
+          if (cidadePerg) {
+            updated[cidadePerg.id] = ''
+          }
+          return updated
+        })
+      } else {
+        const cidadePerg = perguntas.find(p => p.id === currentNodeId && p.tipo === 'cidade')
+        if (cidadePerg) {
+          setValorAtual('')
+        }
+      }
+    }
+    if (estadoSelecionado) {
+      setLastEstado(estadoSelecionado)
+    }
+  }, [estadoSelecionado, isBlock, blockPerguntas, perguntas, currentNodeId, lastEstado])
+
+  // Faz o fetch de cidades do estado selecionado
+  useEffect(() => {
+    if (estadoSelecionado && !cidadesPorEstado[estadoSelecionado] && !loadingCidades[estadoSelecionado]) {
+      setLoadingCidades(prev => ({ ...prev, [estadoSelecionado]: true }))
+      fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estadoSelecionado}/municipios`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            const list = data.map((c: any) => c.nome).sort()
+            setCidadesPorEstado(prev => ({ ...prev, [estadoSelecionado]: list }))
+          }
+        })
+        .catch(console.error)
+        .finally(() => {
+          setLoadingCidades(prev => ({ ...prev, [estadoSelecionado]: false }))
+        })
+    }
+  }, [estadoSelecionado, cidadesPorEstado, loadingCidades])
 
   // --- VALIDAÇÕES DE TELA ---
   const validarUmaResposta = (perg: any, valor: any): string => {
@@ -509,14 +575,40 @@ export const Responder: React.FC = () => {
         )}
 
         {perg.tipo === 'cidade' && (
-          <input
-            type="text"
-            value={val || ''}
-            onChange={(e) => setVal(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Informe a cidade ou município..."
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
-          />
+          estadoSelecionado ? (
+            <div className="relative">
+              <select
+                value={val || ''}
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={onKeyDown}
+                className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm appearance-none"
+              >
+                <option value="">Selecione a Cidade...</option>
+                {loadingCidades[estadoSelecionado] ? (
+                  <option disabled>Carregando cidades...</option>
+                ) : (
+                  (cidadesPorEstado[estadoSelecionado] || []).map(cid => (
+                    <option key={cid} value={cid}>{cid}</option>
+                  ))
+                )}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-muted-foreground">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                </svg>
+              </div>
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={val || ''}
+              onChange={(e) => setVal(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Informe a cidade (selecione o Estado primeiro)..."
+              disabled
+              className="w-full rounded-2xl border border-border bg-card/50 px-5 py-4 text-muted-foreground cursor-not-allowed text-base shadow-sm opacity-60"
+            />
+          )
         )}
 
         {perg.tipo === 'bairro' && (

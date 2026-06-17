@@ -9,6 +9,7 @@ export const Territorial: React.FC = () => {
   const [respostasBrutas, setRespostasBrutas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingRespostas, setLoadingRespostas] = useState(false)
+  const [escopoMapa, setEscopoMapa] = useState<'brasil' | string>('brasil')
 
   // Carga inicial
   useEffect(() => {
@@ -54,23 +55,60 @@ export const Territorial: React.FC = () => {
     if (!loading && todasPesquisas.length > 0) carregarRespostas()
   }, [loading, todasPesquisas.length])
 
-  // Agrupamento por estado para cards de resumo
+  // Agrupamento por estado ou cidade para cards de resumo
   const resumo = useMemo(() => {
-    const perguntasEstado = perguntas.filter(p => p.tipo === 'estado')
-    if (perguntasEstado.length === 0) return []
+    if (escopoMapa === 'brasil') {
+      const perguntasEstado = perguntas.filter(p => p.tipo === 'estado')
+      if (perguntasEstado.length === 0) return []
 
-    const map: Record<string, number> = {}
-    respostasBrutas.forEach(resp => {
-      perguntasEstado.forEach(p => {
-        const val = resp.valores?.[p.id]
-        if (val) map[String(val).trim()] = (map[String(val).trim()] || 0) + 1
+      const map: Record<string, number> = {}
+      respostasBrutas.forEach(resp => {
+        perguntasEstado.forEach(p => {
+          const val = resp.valores?.[p.id]
+          if (val) {
+            const estadoNome = String(val).trim()
+            map[estadoNome] = (map[estadoNome] || 0) + 1
+          }
+        })
       })
-    })
 
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-  }, [respostasBrutas, perguntas])
+      return Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+    } else {
+      const perguntasCidade = perguntas.filter(p => p.tipo === 'cidade')
+      const perguntasEstado = perguntas.filter(p => p.tipo === 'estado')
+      if (perguntasCidade.length === 0) return []
+
+      const map: Record<string, number> = {}
+      respostasBrutas.forEach(resp => {
+        // Verifica se a resposta pertence ao estado selecionado
+        let pertenceAoEstado = true
+        if (perguntasEstado.length > 0) {
+          pertenceAoEstado = perguntasEstado.some(p => {
+            const valUF = resp.valores?.[p.id]
+            if (!valUF) return false
+            const sigla = valUF.trim().toUpperCase()
+            return sigla === escopoMapa || (sigla.length > 2 && sigla.toLowerCase().includes(escopoMapa.toLowerCase()))
+          })
+        }
+
+        if (pertenceAoEstado) {
+          perguntasCidade.forEach(p => {
+            const val = resp.valores?.[p.id]
+            if (val) {
+              const cidadeNome = String(val).trim()
+              map[cidadeNome] = (map[cidadeNome] || 0) + 1
+            }
+          })
+        }
+      })
+
+      return Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+    }
+  }, [respostasBrutas, perguntas, escopoMapa])
 
 
   return (
@@ -112,12 +150,15 @@ export const Territorial: React.FC = () => {
               respostas={respostasBrutas}
               perguntas={perguntas}
               titulo="Respostas por Estado"
+              onEscopoChange={setEscopoMapa}
             />
           </div>
 
           {/* Ranking lateral */}
           <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-            <h3 className="text-base font-semibold text-foreground">Top Estados</h3>
+            <h3 className="text-base font-semibold text-foreground">
+              {escopoMapa === 'brasil' ? 'Top Estados' : `Top Cidades (${escopoMapa})`}
+            </h3>
             {resumo.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
             ) : (
