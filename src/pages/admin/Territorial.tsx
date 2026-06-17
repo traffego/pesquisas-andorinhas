@@ -72,7 +72,6 @@ export const Territorial: React.FC = () => {
       .slice(0, 10)
   }, [respostasBrutas, perguntas])
 
-  const temCampoEstado = perguntas.some(p => p.tipo === 'estado')
 
   return (
     <div className="space-y-6">
@@ -104,16 +103,6 @@ export const Territorial: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : !temCampoEstado ? (
-        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-          <Map className="h-12 w-12 text-muted-foreground/30" />
-          <p className="text-muted-foreground">
-            Nenhuma pesquisa possui campo do tipo <strong>Estado</strong>.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Adicione um campo de estado nos seus fluxos para visualizar o mapa.
-          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

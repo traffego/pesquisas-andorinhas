@@ -14,7 +14,7 @@ import {
 } from 'recharts'
 import {
   BarChart2, FileSpreadsheet, Filter, X, Save, BookOpen,
-  Trash2, Check, Loader2, Tag, ClipboardList, RefreshCw, Pencil
+  Trash2, Check, Loader2, Tag, ClipboardList, RefreshCw, Pencil, Map
 } from 'lucide-react'
 import { MapaBrasil } from '../../components/MapaBrasil'
 
@@ -47,6 +47,7 @@ export const RelatoriosGlobais: React.FC = () => {
   // UI
   const [showSalvos, setShowSalvos] = useState(false)
   const [modalSalvar, setModalSalvar] = useState(false)
+  const [showMapaModal, setShowMapaModal] = useState(false)
   const [nomeRelatorio, setNomeRelatorio] = useState('')
   const [descRelatorio, setDescRelatorio] = useState('')
   const [editandoRelId, setEditandoRelId] = useState<string | undefined>()
@@ -652,13 +653,15 @@ export const RelatoriosGlobais: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  {/* Mapa Territorial */}
-                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Tag className="h-3.5 w-3.5 text-primary" />
-                      <p className="text-xs font-bold text-primary uppercase tracking-wider">Distribuição Territorial</p>
-                    </div>
-                    <MapaBrasil respostas={resultadoFiltrado} perguntas={perguntas} />
+                  {/* Botão Mapa Territorial */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setShowMapaModal(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
+                    >
+                      <Map className="h-4 w-4 text-primary" />
+                      Ver Mapa Territorial
+                    </button>
                   </div>
 
 
@@ -762,6 +765,33 @@ export const RelatoriosGlobais: React.FC = () => {
             </>
           )}
         </div>
+
+      {/* ── Modal Mapa Territorial ── */}
+      {showMapaModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowMapaModal(false)}
+        >
+          <div
+            className="w-full max-w-4xl rounded-2xl border border-border bg-card p-6 shadow-2xl animate-scale-up max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border pb-4 mb-5">
+              <div className="flex items-center gap-2">
+                <Map className="h-4 w-4 text-primary" />
+                <h3 className="text-base font-bold text-foreground">Distribuição Territorial</h3>
+              </div>
+              <button
+                onClick={() => setShowMapaModal(false)}
+                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <MapaBrasil respostas={resultadoFiltrado} perguntas={perguntas} />
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Salvar Relatório ── */}
       {modalSalvar && (
