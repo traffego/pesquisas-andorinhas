@@ -267,24 +267,6 @@ export const Pesquisas: React.FC = () => {
                             <span className="text-[10px] text-muted-foreground font-medium">
                               Objeto: {obj ? `${obj.tipo === 'projeto' ? '📁' : '📅'} ${obj.nome}` : <span className="italic text-muted-foreground/60">Sem objeto</span>}
                             </span>
-                            <span className="text-[10px] text-muted-foreground/30">|</span>
-                            <span className="text-[10px] text-primary font-bold flex items-center gap-1.5">
-                              <GitFork className="h-3 w-3" />
-                              <span>{fluxos.find(f => f.id === p.fluxo_id)?.nome || 'Sem fluxo'}</span>
-                            </span>
-                            {p.publicada && (
-                              <>
-                                <span className="text-[10px] text-muted-foreground/30">|</span>
-                                <a 
-                                  href={`/r/${p.token}`} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-[10px] text-primary hover:underline hover:text-blue-500 font-bold transition-colors"
-                                >
-                                  /r/{p.token}
-                                </a>
-                              </>
-                            )}
                           </div>
                         </div>
                       </td>
