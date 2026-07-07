@@ -279,6 +279,18 @@ export const dbService = {
     return !!data
   },
 
+  async getRespostasCounts(): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('resposta')
+      .select('pesquisa_id')
+    if (error) throw error
+    const counts: Record<string, number> = {}
+    ;(data || []).forEach(r => {
+      counts[r.pesquisa_id] = (counts[r.pesquisa_id] || 0) + 1
+    })
+    return counts
+  },
+
   // --- RELATÓRIOS ---
   async getRelatorios(pesquisaId: string): Promise<{
     totalRespostas: number

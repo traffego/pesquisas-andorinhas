@@ -19,6 +19,7 @@ export const Pesquisas: React.FC = () => {
   const [pesquisas, setPesquisas] = useState<Pesquisa[]>([])
   const [objetos, setObjetos] = useState<Objeto[]>([])
   const [lideres, setLideres] = useState<Lider[]>([])
+  const [respostasCounts, setRespostasCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -45,16 +46,18 @@ export const Pesquisas: React.FC = () => {
   const loadAllData = async () => {
     setLoading(true)
     try {
-      const [pesqData, objData, lidData, fluxData] = await Promise.all([
+      const [pesqData, objData, lidData, fluxData, countsData] = await Promise.all([
         dbService.getPesquisas(),
         dbService.getObjetos(),
         dbService.getLideres(),
-        dbService.getFluxos()
+        dbService.getFluxos(),
+        dbService.getRespostasCounts()
       ])
       setPesquisas(pesqData)
       setObjetos(objData)
       setLideres(lidData)
       setFluxos(fluxData)
+      setRespostasCounts(countsData)
     } catch (err) {
       console.error(err)
     } finally {
@@ -217,6 +220,7 @@ export const Pesquisas: React.FC = () => {
                 <tr className="border-b border-border bg-muted/50 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   <th className="p-4 pl-6">Pesquisa / Objeto</th>
                   <th className="p-4">Líder</th>
+                  <th className="p-4 text-center">Respostas</th>
                   <th className="p-4">Status</th>
                   <th className="p-4 pr-6 text-right">Ações</th>
                 </tr>
@@ -259,6 +263,9 @@ export const Pesquisas: React.FC = () => {
                       <td className="p-4 text-muted-foreground text-sm">
                         {lid?.nome || <span className="italic text-muted-foreground/60 text-xs">Sem líder</span>}
                       </td>
+                      <td className="p-4 text-center font-semibold text-foreground text-sm">
+                        {respostasCounts[p.id] || 0}
+                      </td>
                       <td className="p-4">
                         <button
                           onClick={() => togglePublicada(p)}
@@ -291,7 +298,7 @@ export const Pesquisas: React.FC = () => {
                           onClick={(e) => { if (!p.fluxo_id) e.preventDefault(); }}
                         >
                           <GitFork className="h-3.5 w-3.5" />
-                          <span>Desenhar</span>
+                          <span>Fluxo</span>
                         </Link>
 
                         <Link
