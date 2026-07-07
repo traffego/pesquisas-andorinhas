@@ -67,6 +67,7 @@ export interface Pesquisa {
   descricao: string | null
   token: string
   publicada: boolean
+  exigir_cpf: boolean
   objeto_id: string | null
   lider_id: string | null
   fluxo_id: string | null
@@ -255,10 +256,11 @@ export const dbService = {
   },
 
   // --- RESPOSTAS ---
-  async saveRespostaCompleta(pesquisaId: string, fingerprint: string, itens: { pergunta_id: string; valor: any }[]): Promise<void> {
+  async saveRespostaCompleta(pesquisaId: string, fingerprint: string, itens: { pergunta_id: string; valor: any }[], cpf?: string): Promise<void> {
     const { data: respData, error: respError } = await supabase.from('resposta').insert({
       pesquisa_id: pesquisaId,
-      fingerprint
+      fingerprint,
+      ...(cpf ? { cpf } : {})
     }).select().single()
 
     if (respError) throw respError
@@ -271,6 +273,22 @@ export const dbService = {
 
     const { error: itemsError } = await supabase.from('resposta_item').insert(itemsToInsert)
     if (itemsError) throw itemsError
+  },
+
+  async hasCpfResponded(pesquisaId: string, cpf: string): Promise<boolean> {
+    // CPF de teste especial — sempre passa
+    const cpfNormalizado = cpf.replace(/\D/g, '').toLowerCase()
+    if (cpfNormalizado === '1111111111x'.replace(/\D/g, '').toLowerCase() || cpf.toLowerCase() === '1111111111x') {
+      return false
+    }
+    const { data, error } = await supabase
+      .from('resposta')
+      .select('id')
+      .eq('pesquisa_id', pesquisaId)
+      .eq('cpf', cpf.replace(/\D/g, ''))
+      .maybeSingle()
+    if (error) throw error
+    return !!data
   },
 
   async hasDeviceResponded(pesquisaId: string, fingerprint: string): Promise<boolean> {

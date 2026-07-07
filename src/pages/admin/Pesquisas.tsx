@@ -31,6 +31,7 @@ export const Pesquisas: React.FC = () => {
   const [objetoId, setObjetoId] = useState<string>('')
   const [liderId, setLiderId] = useState<string>('')
   const [publicada, setPublicada] = useState(false)
+  const [exigirCpf, setExigirCpf] = useState(false)
   const [fluxoId, setFluxoId] = useState<string>('')
   const [fluxos, setFluxos] = useState<Fluxo[]>([])
 
@@ -83,6 +84,7 @@ export const Pesquisas: React.FC = () => {
     setObjetoId(objetos[0]?.id || '')
     setLiderId('')
     setPublicada(false)
+    setExigirCpf(false)
     setFluxoId(fluxos[0]?.id || '')
     setIsModalOpen(true)
   }
@@ -94,6 +96,7 @@ export const Pesquisas: React.FC = () => {
     setObjetoId(p.objeto_id || '')
     setLiderId(p.lider_id || '')
     setPublicada(p.publicada)
+    setExigirCpf(p.exigir_cpf || false)
     setFluxoId(p.fluxo_id || '')
     setIsModalOpen(true)
   }
@@ -110,6 +113,7 @@ export const Pesquisas: React.FC = () => {
         descricao,
         token,
         publicada,
+        exigir_cpf: exigirCpf,
         objeto_id: objetoId || null,
         lider_id: liderId || null,
         fluxo_id: fluxoId || null
@@ -568,6 +572,19 @@ export const Pesquisas: React.FC = () => {
                 />
                 <label htmlFor="publicada" className="text-sm font-semibold text-foreground select-none cursor-pointer">
                   Publicar Pesquisa de imediato?
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3 bg-muted/50 border border-border p-3 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="exigir_cpf"
+                  checked={exigirCpf}
+                  onChange={(e) => setExigirCpf(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary bg-background focus:ring-primary focus:ring-offset-background"
+                />
+                <label htmlFor="exigir_cpf" className="text-sm font-semibold text-foreground select-none cursor-pointer">
+                  Exigir CPF antes de responder
                 </label>
               </div>
 

@@ -24,6 +24,13 @@ export const Responder: React.FC = () => {
   const [deviceFp, setDeviceFp] = useState('')
   const [todasPerguntasSession, setTodasPerguntasSession] = useState<Pergunta[]>([])
 
+  // CPF antes do fluxo
+  const [etapaCpf, setEtapaCpf] = useState(false)  // true = aguardando CPF
+  const [cpfDigitado, setCpfDigitado] = useState('')
+  const [cpfErro, setCpfErro] = useState('')
+  const [cpfCheckando, setCpfCheckando] = useState(false)
+  const [cpfConfirmado, setCpfConfirmado] = useState('')  // CPF limpo após validar
+
   // Acumula todas as perguntas carregadas na sessão para o preview de subfluxos
   useEffect(() => {
     if (perguntas.length > 0) {
@@ -116,6 +123,7 @@ export const Responder: React.FC = () => {
           descricao: '',
           token: 'preview',
           publicada: true,
+          exigir_cpf: false,
           fluxo_id: fluxoObj.id,
           created_at: new Date().toISOString(),
           objeto_id: null,
@@ -161,6 +169,11 @@ export const Responder: React.FC = () => {
           return
         }
         pergs = await dbService.getPerguntas(realPesq.fluxo_id)
+
+        // Ativar tela de CPF se pesquisa exigir
+        if (pesq && pesq.exigir_cpf) {
+          setEtapaCpf(true)
+        }
       }
 
       setPesquisa(pesq)
@@ -830,7 +843,7 @@ export const Responder: React.FC = () => {
             pergunta_id: pergId,
             valor: respostasAtuais[pergId]
           }))
-          await dbService.saveRespostaCompleta(pesqId, deviceFp, itens)
+          await dbService.saveRespostaCompleta(pesqId, deviceFp, itens, cpfConfirmado || undefined)
         }
         setRespondeu(true)
         setLoading(false)
@@ -957,6 +970,108 @@ export const Responder: React.FC = () => {
           <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto animate-bounce" />
           <h3 className="text-lg font-bold text-foreground">Pesquisa Indisponível</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">{errorMsg}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Tela de CPF (quando pesquisa exige) ──────────────────────────────────────
+  if (etapaCpf && pesquisa) {
+    const CPF_TESTE = '1111111111x'
+
+    const aplicarMascaraCpf = (v: string) => {
+      const nums = v.replace(/\D/g, '').substring(0, 11)
+      return nums
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    }
+
+    const validarCpf = (cpf: string) => {
+      // backdoor silencioso — sempre passa
+      if (cpf.toLowerCase() === CPF_TESTE) return true
+      const nums = cpf.replace(/\D/g, '')
+      if (nums.length !== 11 || /^(\d)\1+$/.test(nums)) return false
+      let soma = 0
+      for (let i = 0; i < 9; i++) soma += parseInt(nums[i]) * (10 - i)
+      let r = 11 - (soma % 11)
+      if (r >= 10) r = 0
+      if (r !== parseInt(nums[9])) return false
+      soma = 0
+      for (let i = 0; i < 10; i++) soma += parseInt(nums[i]) * (11 - i)
+      r = 11 - (soma % 11)
+      if (r >= 10) r = 0
+      return r === parseInt(nums[10])
+    }
+
+    const handleConfirmarCpf = async () => {
+      const cpfRaw = cpfDigitado.toLowerCase() === CPF_TESTE ? CPF_TESTE : cpfDigitado.replace(/\D/g, '')
+      if (!validarCpf(cpfDigitado)) {
+        setCpfErro('CPF inválido. Verifique e tente novamente.')
+        return
+      }
+      setCpfErro('')
+      setCpfCheckando(true)
+      try {
+        const jaRespondeu = await dbService.hasCpfResponded(pesquisa.id, cpfRaw)
+        if (jaRespondeu) {
+          setCpfErro('Este CPF já respondeu esta pesquisa.')
+          setCpfCheckando(false)
+          return
+        }
+        setCpfConfirmado(cpfRaw)
+        setEtapaCpf(false)
+      } catch (e) {
+        setCpfErro('Erro ao verificar CPF. Tente novamente.')
+      } finally {
+        setCpfCheckando(false)
+      }
+    }
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+        <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl">
+          <div className="text-center space-y-2">
+            <img src={logoImg} alt="Logo" className="h-10 mx-auto mb-4 object-contain" />
+            <h2 className="text-xl font-extrabold text-foreground">{pesquisa.titulo}</h2>
+            <p className="text-sm text-muted-foreground">Para continuar, informe seu CPF.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">CPF</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpfDigitado}
+              onChange={e => {
+                setCpfErro('')
+                setCpfDigitado(aplicarMascaraCpf(e.target.value))
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') handleConfirmarCpf() }}
+              placeholder="000.000.000-00"
+              maxLength={14}
+              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base tracking-widest"
+              autoFocus
+            />
+            {cpfErro && (
+              <p className="text-xs text-red-500 font-semibold flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> {cpfErro}
+              </p>
+            )}
+          </div>
+
+          <button
+            onClick={handleConfirmarCpf}
+            disabled={cpfCheckando || cpfDigitado.length < 11}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {cpfCheckando ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            {cpfCheckando ? 'Verificando...' : 'Continuar'}
+          </button>
         </div>
       </div>
     )
