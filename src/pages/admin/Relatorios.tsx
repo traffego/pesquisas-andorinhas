@@ -61,7 +61,38 @@ export const Relatorios: React.FC = () => {
       }
       setPesquisa(pesq)
 
-      const pergs = pesq.fluxo_id ? await dbService.getPerguntas(pesq.fluxo_id) : []
+      // Carregar fluxos para resolver subfluxos recursivamente
+      const allFluxos = await dbService.getFluxos()
+      
+      const getRecursiveFluxoIds = (initialIds: string[]): string[] => {
+        const visited = new Set<string>()
+        const queue = [...initialIds]
+
+        while (queue.length > 0) {
+          const currentId = queue.shift()
+          if (!currentId || visited.has(currentId)) continue
+          visited.add(currentId)
+
+          const fluxo = allFluxos.find(f => f.id === currentId)
+          if (fluxo && fluxo.flow_data && Array.isArray(fluxo.flow_data.nodes)) {
+            fluxo.flow_data.nodes.forEach((node: any) => {
+              if (node.type === 'subflow' && node.data?.subflowId) {
+                const subId = node.data.subflowId
+                if (!visited.has(subId)) {
+                  queue.push(subId)
+                }
+              }
+            })
+          }
+        }
+
+        return Array.from(visited)
+      }
+
+      const mainFluxoIds = pesq.fluxo_id ? [pesq.fluxo_id] : []
+      const fluxoIds = getRecursiveFluxoIds(mainFluxoIds)
+
+      const pergs = fluxoIds.length > 0 ? await dbService.getPerguntasByFluxos(fluxoIds) : []
       setPerguntas(pergs)
 
       const data = await dbService.getRelatorios(pesquisaId)
