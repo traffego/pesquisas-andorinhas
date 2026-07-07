@@ -43,6 +43,7 @@ export const Relatorios: React.FC = () => {
   const [inputValue, setInputValue] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
+  const [mostrarGraficos, setMostrarGraficos] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -459,9 +460,22 @@ export const Relatorios: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* GRÁFICOS */}
+              {/* Botão para ver/ocultar gráficos */}
               {perguntasMultipla.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setMostrarGraficos(prev => !prev)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
+                  >
+                    <BarChart2 className="h-4 w-4 text-primary" />
+                    {mostrarGraficos ? 'Ocultar Análise Gráfica' : 'Ver Análise Gráfica'}
+                  </button>
+                </div>
+              )}
+
+              {/* GRÁFICOS */}
+              {mostrarGraficos && perguntasMultipla.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
                   {perguntasMultipla.map((perg) => {
                     const dados = getGraficoDados(perg)
                     return (

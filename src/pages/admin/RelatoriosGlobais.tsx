@@ -46,6 +46,7 @@ export const RelatoriosGlobais: React.FC = () => {
 
   // UI
   const [showSalvos, setShowSalvos] = useState(false)
+  const [mostrarGraficos, setMostrarGraficos] = useState(false)
   const [modalSalvar, setModalSalvar] = useState(false)
   const [showMapaModal, setShowMapaModal] = useState(false)
   const [nomeRelatorio, setNomeRelatorio] = useState('')
@@ -669,11 +670,22 @@ export const RelatoriosGlobais: React.FC = () => {
                 </div>
               ) : (
                 <>
-
+                  {/* Botão para ver/ocultar gráficos */}
+                  {categoriasDisponiveis.length > 0 && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setMostrarGraficos(prev => !prev)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
+                      >
+                        <BarChart2 className="h-4 w-4 text-primary" />
+                        {mostrarGraficos ? 'Ocultar Análise Gráfica' : 'Ver Análise Gráfica'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Gráficos por categoria ativa */}
-                  {categoriasDisponiveis.length > 0 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  {mostrarGraficos && categoriasDisponiveis.length > 0 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in">
                       {categoriasDisponiveis.map(cat => {
                         const dados = getGraficoCat(cat.id)
                         if (dados.length === 0) return null
