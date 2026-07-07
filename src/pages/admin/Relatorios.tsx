@@ -82,7 +82,7 @@ export const Relatorios: React.FC = () => {
       if (p.tipo === 'multipla' && p.config?.opcoes) {
         p.config.opcoes.forEach(o => {
           if (o.texto?.trim()) {
-            termos.add(o.texto.trim())
+            termos.add(`${p.titulo}: ${o.texto.trim()}`)
           }
         })
       }
@@ -99,11 +99,11 @@ export const Relatorios: React.FC = () => {
           arr.forEach((v: string) => {
             const texto = opcoes.find(o => o.id === v)?.texto || v
             if (typeof texto === 'string' && texto.trim()) {
-              termos.add(texto.trim())
+              termos.add(`${p.titulo}: ${texto.trim()}`)
             }
           })
         } else if (typeof val === 'string' && val.trim()) {
-          termos.add(val.trim())
+          termos.add(`${p.titulo}: ${val.trim()}`)
         }
       })
     })
@@ -130,10 +130,12 @@ export const Relatorios: React.FC = () => {
               const texto = opcoes.find(o => o.id === v)?.texto || v
               if (typeof texto === 'string') {
                 valoresAmigaveis.add(texto.trim().toLowerCase())
+                valoresAmigaveis.add(`${p.titulo.trim().toLowerCase()}: ${texto.trim().toLowerCase()}`)
               }
             })
           } else if (typeof val === 'string') {
             valoresAmigaveis.add(val.trim().toLowerCase())
+            valoresAmigaveis.add(`${p.titulo.trim().toLowerCase()}: ${val.trim().toLowerCase()}`)
           }
         })
 
