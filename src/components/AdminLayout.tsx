@@ -58,7 +58,7 @@ export const AdminLayout: React.FC = () => {
         {/* Logo & Toggle */}
         <div className={`p-5 border-b border-border flex items-center justify-between ${collapsed ? 'flex-col gap-4' : ''}`}>
           {!collapsed && (
-            <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1" />
+            <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1" />
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}

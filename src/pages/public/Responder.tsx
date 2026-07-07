@@ -1049,7 +1049,7 @@ export const Responder: React.FC = () => {
       {/* Header */}
       <header className="py-6 px-6 border-b border-border/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 bg-card/10 backdrop-blur-sm">
         <div className="flex items-start md:items-center gap-4">
-          <img src={logoImg} alt="Andorinha Logo" className="h-10 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1.5 shrink-0" />
+          <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1.5 shrink-0" />
           <div className="h-8 w-[1px] bg-border hidden md:block"></div>
           <div className="space-y-1">
             {objetoRelacionado && (

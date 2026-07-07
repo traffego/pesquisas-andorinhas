@@ -40,7 +40,7 @@ export const Login: React.FC = () => {
 
       <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-8 shadow-2xl relative z-10">
         <div className="flex flex-col items-center mb-8">
-          <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain mb-4 dark:bg-white dark:rounded-xl dark:p-2" />
+          <img src={logoImg} alt="Andorinha Logo" className="h-24 w-auto object-contain mb-4 dark:bg-white dark:rounded-xl dark:p-2" />
           <p className="text-muted-foreground text-sm text-center">
             Acesso restrito. Faça login para continuar.
           </p>
