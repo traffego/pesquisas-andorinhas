@@ -218,7 +218,6 @@ export const Pesquisas: React.FC = () => {
                   <th className="p-4 pl-6">Pesquisa / Objeto</th>
                   <th className="p-4">Líder</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Link Público</th>
                   <th className="p-4 pr-6 text-right">Ações</th>
                 </tr>
               </thead>
@@ -241,6 +240,19 @@ export const Pesquisas: React.FC = () => {
                               <GitFork className="h-3 w-3" />
                               <span>{fluxos.find(f => f.id === p.fluxo_id)?.nome || 'Sem fluxo'}</span>
                             </span>
+                            {p.publicada && (
+                              <>
+                                <span className="text-[10px] text-muted-foreground/30">|</span>
+                                <a 
+                                  href={`/r/${p.token}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-primary hover:underline hover:text-blue-500 font-bold transition-colors"
+                                >
+                                  /r/{p.token}
+                                </a>
+                              </>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -267,20 +279,6 @@ export const Pesquisas: React.FC = () => {
                           )}
                         </button>
                       </td>
-                      <td className="p-4 text-sm text-muted-foreground">
-                        {p.publicada ? (
-                          <a 
-                            href={`/r/${p.token}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline hover:text-blue-500 font-semibold transition-colors"
-                          >
-                            /r/{p.token}
-                          </a>
-                        ) : (
-                          <span className="italic text-muted-foreground/65">Falta publicar</span>
-                        )}
-                      </td>
                       <td className="p-4 pr-6 text-right space-x-1 whitespace-nowrap">
                         <Link
                           to={p.fluxo_id ? `/admin/fluxos/${p.fluxo_id}/builder` : '#'}
@@ -293,7 +291,7 @@ export const Pesquisas: React.FC = () => {
                           onClick={(e) => { if (!p.fluxo_id) e.preventDefault(); }}
                         >
                           <GitFork className="h-3.5 w-3.5" />
-                          <span>Fluxo</span>
+                          <span>Desenhar</span>
                         </Link>
 
                         <Link
@@ -311,7 +309,7 @@ export const Pesquisas: React.FC = () => {
                           title="Relatórios"
                         >
                           <BarChart3 className="h-3.5 w-3.5" />
-                          <span>Métricas</span>
+                          <span>Relatórios</span>
                         </Link>
 
                         <button
