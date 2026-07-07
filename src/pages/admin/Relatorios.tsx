@@ -551,7 +551,7 @@ export const Relatorios: React.FC = () => {
                       <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
                         <th className="p-3 pl-4">Data / Hora</th>
                         {perguntas.map(p => (
-                          <th key={p.id} className="p-3 truncate max-w-[200px]">{p.titulo}</th>
+                          <th key={p.id} className="p-3 truncate max-w-[200px]" title={p.titulo}>{p.titulo}</th>
                         ))}
                       </tr>
                     </thead>
