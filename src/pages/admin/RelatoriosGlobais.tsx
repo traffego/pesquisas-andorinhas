@@ -24,6 +24,8 @@ const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6
 export const RelatoriosGlobais: React.FC = () => {
   // Dados base
   const [todasPesquisas, setTodasPesquisas] = useState<Pesquisa[]>([])
+  const [pesquisasSelecionadas, setPesquisasSelecionadas] = useState<string[]>([])
+  const [showSeletorPesquisas, setShowSeletorPesquisas] = useState(false)
   const [categorias, setCategorias] = useState<CategoriaCampo[]>([])
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [relatoriosSalvos, setRelatoriosSalvos] = useState<RelatorioSalvo[]>([])
@@ -66,6 +68,7 @@ export const RelatoriosGlobais: React.FC = () => {
           dbService.getFluxos()
         ])
         setTodasPesquisas(pesqs)
+        setPesquisasSelecionadas(pesqs.map(p => p.id))
         setCategorias(cats)
         setRelatoriosSalvos(rels)
         setTodosFluxos(fluxos)
@@ -103,14 +106,20 @@ export const RelatoriosGlobais: React.FC = () => {
     return Array.from(visited)
   }, [todosFluxos])
 
-  // ── Carrega perguntas de todos os fluxos das pesquisas ──────────────────────
+  // pesquisas ativas (interseção com selecionadas)
+  const pesquisasAtivas = useMemo(
+    () => todasPesquisas.filter(p => pesquisasSelecionadas.includes(p.id)),
+    [todasPesquisas, pesquisasSelecionadas]
+  )
+
+  // ── Carrega perguntas dos fluxos das pesquisas ativas ─────────────────────
   useEffect(() => {
-    if (todasPesquisas.length === 0) {
+    if (pesquisasAtivas.length === 0) {
       setPerguntas([])
       return
     }
 
-    const mainFluxoIds = [...new Set(todasPesquisas.map(p => p.fluxo_id).filter(Boolean) as string[])]
+    const mainFluxoIds = [...new Set(pesquisasAtivas.map(p => p.fluxo_id).filter(Boolean) as string[])]
     const fluxoIds = getRecursiveFluxoIds(mainFluxoIds)
 
     if (fluxoIds.length === 0) {
@@ -119,18 +128,19 @@ export const RelatoriosGlobais: React.FC = () => {
     }
 
     dbService.getPerguntasByFluxos(fluxoIds).then(setPerguntas).catch(console.error)
-  }, [todasPesquisas, getRecursiveFluxoIds])
+  }, [pesquisasAtivas, getRecursiveFluxoIds])
 
-  // ── Carrega respostas automaticamente de todas as pesquisas ──────────────────
+  // ── Carrega respostas das pesquisas ativas ───────────────────────────────
   useEffect(() => {
     let active = true
     const carregarRespostas = async () => {
-      if (todasPesquisas.length === 0) {
+      if (pesquisasAtivas.length === 0) {
         setRespostasBrutas([])
+        setHasSearched(true)
         return
       }
 
-      const idsAlvo = todasPesquisas.map(p => p.id)
+      const idsAlvo = pesquisasAtivas.map(p => p.id)
 
       setLoadingRespostas(true)
       try {
@@ -152,7 +162,7 @@ export const RelatoriosGlobais: React.FC = () => {
     return () => {
       active = false
     }
-  }, [todasPesquisas])
+  }, [pesquisasAtivas])
 
   // ── Categorias com perguntas nas pesquisas selecionadas ───────────────────
   const categoriasDisponiveis = useMemo(() => {
@@ -451,6 +461,65 @@ export const RelatoriosGlobais: React.FC = () => {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Seletor de Pesquisas */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSeletorPesquisas(o => !o)}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
+            >
+              <ClipboardList className="h-4 w-4 text-primary" />
+              Pesquisas
+              <span className="ml-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold px-1.5 py-0.5">
+                {pesquisasSelecionadas.length}/{todasPesquisas.length}
+              </span>
+            </button>
+
+            {showSeletorPesquisas && (
+              <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-fade-in">
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                  <p className="text-sm font-bold text-foreground">Selecionar Pesquisas</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPesquisasSelecionadas(todasPesquisas.map(p => p.id))}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Todas
+                    </button>
+                    <span className="text-muted-foreground/40">|</span>
+                    <button
+                      onClick={() => setPesquisasSelecionadas([])}
+                      className="text-[10px] font-bold text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                    >
+                      Nenhuma
+                    </button>
+                    <button onClick={() => setShowSeletorPesquisas(false)} className="ml-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
+                  {todasPesquisas.map(p => {
+                    const selecionada = pesquisasSelecionadas.includes(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setPesquisasSelecionadas(prev =>
+                          selecionada ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                        )}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-left cursor-pointer"
+                      >
+                        <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${selecionada ? 'bg-primary border-primary' : 'border-border'}`}>
+                          {selecionada && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </div>
+                        <p className="text-sm text-foreground font-medium truncate">{p.titulo}</p>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
