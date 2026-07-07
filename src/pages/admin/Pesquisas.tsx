@@ -20,6 +20,7 @@ export const Pesquisas: React.FC = () => {
   const [objetos, setObjetos] = useState<Objeto[]>([])
   const [lideres, setLideres] = useState<Lider[]>([])
   const [respostasCounts, setRespostasCounts] = useState<Record<string, number>>({})
+  const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -180,6 +181,17 @@ export const Pesquisas: React.FC = () => {
     }
   }
 
+  const pesquisasFiltradas = pesquisas.filter(p => {
+    const obj = objetos.find(ob => ob.id === p.objeto_id)
+    const lid = lideres.find(l => l.id === p.lider_id)
+    const termo = busca.toLowerCase()
+    return (
+      p.titulo.toLowerCase().includes(termo) ||
+      (obj?.nome || '').toLowerCase().includes(termo) ||
+      (lid?.nome || '').toLowerCase().includes(termo)
+    )
+  })
+
   return (
     <div className="space-y-6 animate-fade-in text-foreground">
       <div className="flex justify-between items-center">
@@ -195,6 +207,18 @@ export const Pesquisas: React.FC = () => {
           Nova Pesquisa
         </button>
       </div>
+
+      {!loading && pesquisas.length > 0 && (
+        <div className="flex max-w-md">
+          <input
+            type="text"
+            placeholder="Buscar por título, objeto ou líder..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm shadow-sm"
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -212,6 +236,10 @@ export const Pesquisas: React.FC = () => {
             Cadastrar Pesquisa
           </button>
         </div>
+      ) : pesquisasFiltradas.length === 0 ? (
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-card/50">
+          <p className="text-muted-foreground text-sm font-medium">Nenhuma pesquisa encontrada para a busca.</p>
+        </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -226,7 +254,7 @@ export const Pesquisas: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pesquisas.map((p) => {
+                {pesquisasFiltradas.map((p) => {
                   const obj = objetos.find(ob => ob.id === p.objeto_id)
                   const lid = lideres.find(l => l.id === p.lider_id)
 
