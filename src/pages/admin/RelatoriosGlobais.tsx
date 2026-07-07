@@ -295,7 +295,12 @@ export const RelatoriosGlobais: React.FC = () => {
     } else {
       setEditandoRelId(undefined)
       setNomeRelatorio('')
-      setDescRelatorio('')
+      if (tagsFiltro.length > 0) {
+        const conexao = logicaFiltro === 'AND' ? ' E ' : ' OU '
+        setDescRelatorio(`Filtros: ${tagsFiltro.join(conexao)}`)
+      } else {
+        setDescRelatorio('')
+      }
     }
     setModalSalvar(true)
   }
