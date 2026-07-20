@@ -76,7 +76,8 @@ export const Relatorios: React.FC = () => {
           const fluxo = allFluxos.find(f => f.id === currentId)
           if (fluxo && fluxo.flow_data && Array.isArray(fluxo.flow_data.nodes)) {
             fluxo.flow_data.nodes.forEach((node: any) => {
-              if (node.type === 'subflow' && node.data?.subflowId) {
+              // Inclui tanto subfluxos quanto blocos reutilizáveis
+              if ((node.type === 'subflow' || node.type === 'block') && node.data?.subflowId) {
                 const subId = node.data.subflowId
                 if (!visited.has(subId)) {
                   queue.push(subId)
