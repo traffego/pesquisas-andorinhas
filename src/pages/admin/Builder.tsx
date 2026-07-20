@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { 
   ReactFlow, 
@@ -683,26 +684,28 @@ export const Builder: React.FC = () => {
         </div>
       </div>
 
-      {/* Toast de feedback */}
-      {toast && (
+      {/* Toast de feedback — renderizado via portal no body para escapar do overflow */}
+      {toast && createPortal(
         <div
-          className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold shadow-xl border transition-all animate-fade-in ${
+          style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: 9999 }}
+          className={`flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold shadow-2xl border ${
             toast.type === 'success'
-              ? 'bg-emerald-950 border-emerald-800 text-emerald-300'
-              : 'bg-red-950 border-red-800 text-red-300'
+              ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+              : 'bg-red-950 border-red-700 text-red-300'
           }`}
         >
           {toast.type === 'success' ? (
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           ) : (
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           )}
           {toast.msg}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Editor React Flow */}
