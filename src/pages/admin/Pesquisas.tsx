@@ -34,6 +34,7 @@ export const Pesquisas: React.FC = () => {
 
   // Form states
   const [id, setId] = useState<string | undefined>(undefined)
+  const [tokenAtual, setTokenAtual] = useState<string>('')  // token da pesquisa em edição
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
   const [objetoId, setObjetoId] = useState<string>('')
@@ -87,6 +88,7 @@ export const Pesquisas: React.FC = () => {
 
   const handleOpenAdd = () => {
     setId(undefined)
+    setTokenAtual('')  // limpa: novo token será gerado no save
     setTitulo('')
     setDescricao('')
     setObjetoId(objetos[0]?.id || '')
@@ -99,6 +101,7 @@ export const Pesquisas: React.FC = () => {
 
   const handleOpenEdit = (p: Pesquisa) => {
     setId(p.id)
+    setTokenAtual(p.token)  // preserva o token original para não quebrar links
     setTitulo(p.titulo)
     setDescricao(p.descricao || '')
     setObjetoId(p.objeto_id || '')
@@ -115,7 +118,10 @@ export const Pesquisas: React.FC = () => {
 
     setSaving(true)
     try {
-      const token = id ? pesquisas.find(p => p.id === id)?.token || generateToken() : generateToken()
+      // Para edição: sempre usa o token existente guardado no estado.
+      // Para criação: gera um novo token único.
+      // NUNCA busca da array pesquisas (pode estar desatualizada e causar regeneração acidental).
+      const token = id ? (tokenAtual || generateToken()) : generateToken()
       await dbService.savePesquisa({
         id,
         titulo,
