@@ -54,6 +54,13 @@ export const Builder: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   // Modais
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
@@ -527,17 +534,18 @@ export const Builder: React.FC = () => {
     // 1. Início conectado a alguma coisa
     const isStartConnected = edges.some(e => e.source === 'start')
     if (!isStartConnected) {
-      alert('Aviso: O nó "Início" não está conectado. Conecte-o a uma pergunta para que o fluxo possa começar.')
+      showToast('error', 'O nó "Início" não está conectado. Conecte-o a uma pergunta.')
       return false
     }
 
     // 2. Fim conectado a alguma coisa
     const isEndConnected = edges.some(e => e.target === 'end')
     if (!isEndConnected) {
-      alert('Aviso: O nó "Fim" não está conectado. Conecte o final das perguntas a ele.')
+      showToast('error', 'O nó "Fim" não está conectado. Conecte o final das perguntas a ele.')
       return false
     }
 
+    setSaving(true)
     try {
       // 1. Estrutura flow_data
       const flowData = {
@@ -589,10 +597,14 @@ export const Builder: React.FC = () => {
       })
 
       await dbService.syncPerguntas(fluxo.id, perguntas)
+      showToast('success', 'Fluxo salvo com sucesso!')
       return true
     } catch (err) {
       console.error(err)
+      showToast('error', 'Erro ao salvar o fluxo. Tente novamente.')
       return false
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -658,13 +670,40 @@ export const Builder: React.FC = () => {
           </button>
           <button
             onClick={handleSaveFlow}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-md shadow-primary/20 hover:bg-primary-hover active:scale-[0.98] transition-all cursor-pointer"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-md shadow-primary/20 hover:bg-primary-hover active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Save className="h-4 w-4" />
-            Salvar Fluxo
+            {saving ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? 'Salvando...' : 'Salvar Fluxo'}
           </button>
         </div>
       </div>
+
+      {/* Toast de feedback */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold shadow-xl border transition-all animate-fade-in ${
+            toast.type === 'success'
+              ? 'bg-emerald-950 border-emerald-800 text-emerald-300'
+              : 'bg-red-950 border-red-800 text-red-300'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.msg}
+        </div>
+      )}
 
       {/* Editor React Flow */}
       <div className="flex-1 min-h-0 relative">

@@ -220,7 +220,9 @@ export const dbService = {
 
   async savePesquisa(pesquisa: Omit<Pesquisa, 'id' | 'created_at'> & { id?: string }): Promise<Pesquisa> {
     if (pesquisa.id) {
-      const { data, error } = await supabase.from('pesquisa').update(pesquisa).eq('id', pesquisa.id).select().single()
+      // Filtra campos que não devem ser enviados no update (user_id é gerenciado pelo RLS)
+      const { id, user_id, ...updatePayload } = pesquisa as any
+      const { data, error } = await supabase.from('pesquisa').update(updatePayload).eq('id', id).select().single()
       if (error) throw error
       return data
     } else {

@@ -22,7 +22,14 @@ export const Pesquisas: React.FC = () => {
   const [respostasCounts, setRespostasCounts] = useState<Record<string, number>>({})
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   // Form states
   const [id, setId] = useState<string | undefined>(undefined)
@@ -105,6 +112,7 @@ export const Pesquisas: React.FC = () => {
     e.preventDefault()
     if (!titulo.trim()) return
 
+    setSaving(true)
     try {
       const token = id ? pesquisas.find(p => p.id === id)?.token || generateToken() : generateToken()
       await dbService.savePesquisa({
@@ -119,9 +127,13 @@ export const Pesquisas: React.FC = () => {
         fluxo_id: fluxoId || null
       })
       setIsModalOpen(false)
+      showToast('success', id ? 'Pesquisa atualizada com sucesso!' : 'Pesquisa criada com sucesso!')
       loadAllData()
     } catch (err) {
       console.error(err)
+      showToast('error', 'Erro ao salvar a pesquisa. Tente novamente.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -141,9 +153,11 @@ export const Pesquisas: React.FC = () => {
         ...p,
         publicada: !p.publicada
       })
+      showToast('success', p.publicada ? 'Pesquisa despublicada.' : 'Pesquisa publicada!')
       loadAllData()
     } catch (err) {
       console.error(err)
+      showToast('error', 'Erro ao alterar status da pesquisa.')
     }
   }
 
@@ -598,13 +612,37 @@ export const Pesquisas: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-xl shadow-lg shadow-primary/10 transition-all cursor-pointer"
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-primary-foreground bg-primary hover:opacity-90 rounded-xl shadow-lg shadow-primary/10 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {id ? 'Salvar Alterações' : 'Criar Pesquisa'}
+                  {saving && <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                  {saving ? 'Salvando...' : (id ? 'Salvar Alterações' : 'Criar Pesquisa')}
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Toast de feedback global */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold shadow-xl border transition-all animate-fade-in ${
+            toast.type === 'success'
+              ? 'bg-emerald-950 border-emerald-800 text-emerald-300'
+              : 'bg-red-950 border-red-800 text-red-300'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.msg}
         </div>
       )}
     </div>
