@@ -186,12 +186,25 @@ export const dbService = {
       // Remove campos que não devem ir no body do update
       const { id, user_id, created_at, ...updatePayload } = fluxo as any
 
-      // UPDATE sem .single() para evitar PGRST116
-      const { error } = await supabase.from('fluxo').update(updatePayload).eq('id', id)
-      if (error) throw error
+      // UPDATE com select('id') para detectar se 0 linhas foram afetadas
+      // (ocorre silenciosamente quando RLS bloqueia a operação)
+      const { data: updatedRows, error } = await supabase
+        .from('fluxo')
+        .update(updatePayload)
+        .eq('id', id)
+        .select('id')
 
-      // SELECT separado para buscar o registro atualizado
-      const { data, error: fetchError } = await supabase.from('fluxo').select('*').eq('id', id).maybeSingle()
+      if (error) throw error
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error('O fluxo não pôde ser salvo. Verifique suas permissões ou tente novamente.')
+      }
+
+      // SELECT separado para buscar o registro completo atualizado
+      const { data, error: fetchError } = await supabase
+        .from('fluxo')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
       if (fetchError) throw fetchError
       return data as Fluxo
     } else {
@@ -234,12 +247,25 @@ export const dbService = {
       // - created_at: campo de só leitura
       const { id, user_id, created_at, ...updatePayload } = pesquisa as any
 
-      // Faz o UPDATE sem .single() para evitar PGRST116 quando 0 linhas são retornadas pelo RLS
-      const { error } = await supabase.from('pesquisa').update(updatePayload).eq('id', id)
-      if (error) throw error
+      // UPDATE com select('id') para detectar se 0 linhas foram afetadas
+      // (ocorre silenciosamente quando RLS bloqueia a operação)
+      const { data: updatedRows, error } = await supabase
+        .from('pesquisa')
+        .update(updatePayload)
+        .eq('id', id)
+        .select('id')
 
-      // Busca o registro atualizado em um SELECT separado
-      const { data, error: fetchError } = await supabase.from('pesquisa').select('*').eq('id', id).maybeSingle()
+      if (error) throw error
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error('A pesquisa não pôde ser salva. Verifique suas permissões ou tente novamente.')
+      }
+
+      // Busca o registro completo atualizado em um SELECT separado
+      const { data, error: fetchError } = await supabase
+        .from('pesquisa')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
       if (fetchError) throw fetchError
       return data as Pesquisa
     } else {
