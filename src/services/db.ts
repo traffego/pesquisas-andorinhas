@@ -183,9 +183,17 @@ export const dbService = {
 
   async saveFluxo(fluxo: Omit<Fluxo, 'id' | 'created_at'> & { id?: string }): Promise<Fluxo> {
     if (fluxo.id) {
-      const { data, error } = await supabase.from('fluxo').update(fluxo).eq('id', fluxo.id).select().single()
+      // Remove campos que não devem ir no body do update
+      const { id, user_id, created_at, ...updatePayload } = fluxo as any
+
+      // UPDATE sem .single() para evitar PGRST116
+      const { error } = await supabase.from('fluxo').update(updatePayload).eq('id', id)
       if (error) throw error
-      return data
+
+      // SELECT separado para buscar o registro atualizado
+      const { data, error: fetchError } = await supabase.from('fluxo').select('*').eq('id', id).maybeSingle()
+      if (fetchError) throw fetchError
+      return data as Fluxo
     } else {
       const { data: userData } = await supabase.auth.getUser()
       const { data, error } = await supabase.from('fluxo').insert({ ...fluxo, user_id: userData.user?.id }).select().single()
@@ -220,11 +228,20 @@ export const dbService = {
 
   async savePesquisa(pesquisa: Omit<Pesquisa, 'id' | 'created_at'> & { id?: string }): Promise<Pesquisa> {
     if (pesquisa.id) {
-      // Filtra campos que não devem ser enviados no update (user_id é gerenciado pelo RLS)
-      const { id, user_id, ...updatePayload } = pesquisa as any
-      const { data, error } = await supabase.from('pesquisa').update(updatePayload).eq('id', id).select().single()
+      // Remove campos que não devem ser enviados no update:
+      // - id: está no filtro .eq(), não no body
+      // - user_id: gerenciado pelo RLS/banco
+      // - created_at: campo de só leitura
+      const { id, user_id, created_at, ...updatePayload } = pesquisa as any
+
+      // Faz o UPDATE sem .single() para evitar PGRST116 quando 0 linhas são retornadas pelo RLS
+      const { error } = await supabase.from('pesquisa').update(updatePayload).eq('id', id)
       if (error) throw error
-      return data
+
+      // Busca o registro atualizado em um SELECT separado
+      const { data, error: fetchError } = await supabase.from('pesquisa').select('*').eq('id', id).maybeSingle()
+      if (fetchError) throw fetchError
+      return data as Pesquisa
     } else {
       const { data: userData } = await supabase.auth.getUser()
       const { data, error } = await supabase.from('pesquisa').insert({ ...pesquisa, user_id: userData.user?.id }).select().single()
