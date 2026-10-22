@@ -1109,44 +1109,37 @@ export const Responder: React.FC = () => {
 
           {confirmandoDados && participanteEncontrado ? (
             <div className="space-y-6 animate-scale-up">
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
-                <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                  <CheckCircle2 className="h-5 w-5" /> Inscrição Localizada!
-                </div>
-                <div className="space-y-1.5">
-                  <p className="text-lg font-extrabold text-foreground">
-                    Olá, {participanteEncontrado.nome}!
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Confira seus dados de inscrição:
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-4 text-center sm:text-left shadow-sm">
+                <div className="space-y-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-primary block">
+                    Atleta Participante
+                  </span>
+                  <h3 className="text-2xl font-black text-foreground tracking-tight leading-tight">
+                    {participanteEncontrado.nome}
+                  </h3>
+                  <p className="text-xs text-muted-foreground flex items-center justify-center sm:justify-start gap-1 font-medium">
+                    📍 {(() => {
+                      if (objetoRelacionado?.nome) {
+                        if (objetoRelacionado.nome.includes('Gravatá')) return 'Gravatá - PE'
+                        if (objetoRelacionado.nome.includes('Jaboatão')) return 'Jaboatão dos Guararapes - PE'
+                        if (objetoRelacionado.nome.includes('Olinda')) return 'Olinda - PE'
+                        if (objetoRelacionado.nome.includes('Ipojuca')) return 'Ipojuca - PE'
+                        if (objetoRelacionado.nome.includes('Palmas')) return 'Palmas - TO'
+                      }
+                      return 'Pernambuco - Brasil'
+                    })()}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 text-xs border-t border-border/50">
-                  {participanteEncontrado.dados_extras?.distancia && (
-                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Distância</span>
-                      <strong className="text-foreground">{participanteEncontrado.dados_extras.distancia}</strong>
-                    </div>
-                  )}
-                  {participanteEncontrado.dados_extras?.camisa && (
-                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Camisa</span>
-                      <strong className="text-foreground">{participanteEncontrado.dados_extras.camisa}</strong>
-                    </div>
-                  )}
-                  {participanteEncontrado.dados_extras?.peito && (
-                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Nº de Peito</span>
-                      <strong className="text-foreground">{participanteEncontrado.dados_extras.peito}</strong>
-                    </div>
-                  )}
-                  {participanteEncontrado.dados_extras?.equipe && (
-                    <div className="bg-background/80 rounded-lg p-2 border border-border/50 col-span-2">
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Equipe</span>
-                      <strong className="text-foreground">{participanteEncontrado.dados_extras.equipe}</strong>
-                    </div>
-                  )}
+                <div className="pt-3 border-t border-border/50">
+                  <div className="bg-background/80 border border-border/60 rounded-xl p-3 inline-block w-full sm:w-auto min-w-[140px] text-center sm:text-left">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      PROVA
+                    </span>
+                    <span className="text-base font-extrabold text-foreground mt-0.5 block">
+                      🏃 {participanteEncontrado.dados_extras?.distancia || '5KM'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
