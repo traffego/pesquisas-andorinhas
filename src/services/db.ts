@@ -38,7 +38,19 @@ export interface Objeto {
   codigo_objeto: string | null
   codigo_programa: string | null
   nome_programa: string | null
+  locais?: string[]
   user_id?: string
+  created_at?: string
+}
+
+export interface Participante {
+  id: string
+  objeto_id: string
+  nome: string
+  cpf: string | null
+  telefone: string | null
+  email: string | null
+  dados_extras?: Record<string, any>
   created_at?: string
 }
 
@@ -68,6 +80,7 @@ export interface Pesquisa {
   token: string
   publicada: boolean
   exigir_cpf: boolean
+  tipo_identificacao?: 'cpf' | 'celular' | string
   objeto_id: string | null
   lider_id: string | null
   fluxo_id: string | null
@@ -301,11 +314,20 @@ export const dbService = {
   },
 
   // --- RESPOSTAS ---
-  async saveRespostaCompleta(pesquisaId: string, fingerprint: string, itens: { pergunta_id: string; valor: any }[], cpf?: string): Promise<void> {
+  async saveRespostaCompleta(
+    pesquisaId: string, 
+    fingerprint: string, 
+    itens: { pergunta_id: string; valor: any }[], 
+    cpf?: string,
+    participanteId?: string | null,
+    telefone?: string | null
+  ): Promise<void> {
     const { data: respData, error: respError } = await supabase.from('resposta').insert({
       pesquisa_id: pesquisaId,
       fingerprint,
-      ...(cpf ? { cpf } : {})
+      ...(cpf ? { cpf: cpf.replace(/\D/g, '') } : {}),
+      ...(participanteId ? { participante_id: participanteId } : {}),
+      ...(telefone ? { telefone: telefone.replace(/\D/g, '') } : {})
     }).select().single()
 
     if (respError) throw respError
@@ -318,6 +340,18 @@ export const dbService = {
 
     const { error: itemsError } = await supabase.from('resposta_item').insert(itemsToInsert)
     if (itemsError) throw itemsError
+  },
+
+  async buscarParticipante(objetoId: string, identificador: string): Promise<Participante | null> {
+    const { data, error } = await supabase.rpc('buscar_participante', {
+      p_objeto_id: objetoId,
+      p_identificador: identificador
+    })
+    if (error) {
+      console.error('Erro ao buscar participante:', error)
+      return null
+    }
+    return (data && data.length > 0) ? (data[0] as Participante) : null
   },
 
   async hasCpfResponded(pesquisaId: string, cpf: string): Promise<boolean> {
@@ -333,6 +367,27 @@ export const dbService = {
       .eq('cpf', cpf.replace(/\D/g, ''))
       .maybeSingle()
     if (error) throw error
+    return !!data
+  },
+
+  async hasIdentifierResponded(pesquisaId: string, identificador: string, participanteId?: string | null): Promise<boolean> {
+    const clean = identificador.replace(/\D/g, '').toLowerCase()
+    if (clean === '1111111111x' || identificador.toLowerCase() === '1111111111x') {
+      return false
+    }
+    
+    // Verifica por participante_id, cpf ou telefone
+    let query = supabase.from('resposta').select('id').eq('pesquisa_id', pesquisaId)
+    if (participanteId) {
+      query = query.or(`participante_id.eq.${participanteId},cpf.eq.${clean},telefone.eq.${clean}`)
+    } else {
+      query = query.or(`cpf.eq.${clean},telefone.eq.${clean}`)
+    }
+    const { data, error } = await query.maybeSingle()
+    if (error) {
+      console.warn('Erro ao verificar resposta prévia:', error)
+      return false
+    }
     return !!data
   },
 

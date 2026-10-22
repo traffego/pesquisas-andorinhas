@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { dbService, type Pesquisa, type Pergunta, type Objeto, type Lider, type Fluxo } from '../../services/db'
+import { dbService, type Pesquisa, type Pergunta, type Objeto, type Lider, type Fluxo, type Participante } from '../../services/db'
 import logoImg from '../../assets/logo.png'
 import { 
   CheckCircle2, 
   ChevronRight, 
   Lock, 
-  AlertTriangle
+  AlertTriangle,
+  UserCheck,
+  Search
 } from 'lucide-react'
 
 export const Responder: React.FC = () => {
@@ -24,12 +26,17 @@ export const Responder: React.FC = () => {
   const [deviceFp, setDeviceFp] = useState('')
   const [todasPerguntasSession, setTodasPerguntasSession] = useState<Pergunta[]>([])
 
-  // CPF antes do fluxo
-  const [etapaCpf, setEtapaCpf] = useState(false)  // true = aguardando CPF
-  const [cpfDigitado, setCpfDigitado] = useState('')
-  const [cpfErro, setCpfErro] = useState('')
-  const [cpfCheckando, setCpfCheckando] = useState(false)
-  const [cpfConfirmado, setCpfConfirmado] = useState('')  // CPF limpo após validar
+  // Identificação antes do fluxo (CPF ou Celular)
+  const [etapaIdentificacao, setEtapaIdentificacao] = useState(false)
+  const [modoIdentificacao, setModoIdentificacao] = useState<'cpf' | 'celular'>('cpf')
+  const [identificadorDigitado, setIdentificadorDigitado] = useState('')
+  const [identificadorErro, setIdentificadorErro] = useState('')
+  const [identificadorCheckando, setIdentificadorCheckando] = useState(false)
+  const [participanteEncontrado, setParticipanteEncontrado] = useState<Participante | null>(null)
+  const [participanteConfirmado, setParticipanteConfirmado] = useState<Participante | null>(null)
+  const [confirmandoDados, setConfirmandoDados] = useState(false)
+  const [cpfConfirmado, setCpfConfirmado] = useState('')
+  const [telefoneConfirmado, setTelefoneConfirmado] = useState('')
 
   // Acumula todas as perguntas carregadas na sessão para o preview de subfluxos
   useEffect(() => {
@@ -170,9 +177,11 @@ export const Responder: React.FC = () => {
         }
         pergs = await dbService.getPerguntas(realPesq.fluxo_id)
 
-        // Ativar tela de CPF se pesquisa exigir
-        if (pesq && pesq.exigir_cpf) {
-          setEtapaCpf(true)
+        // Ativar tela de identificação se pesquisa exigir
+        if (pesq && (pesq.exigir_cpf || pesq.tipo_identificacao)) {
+          const tipo = (pesq.tipo_identificacao === 'celular' ? 'celular' : 'cpf')
+          setModoIdentificacao(tipo)
+          setEtapaIdentificacao(true)
         }
       }
 
@@ -708,33 +717,39 @@ export const Responder: React.FC = () => {
           </div>
         )}
 
-        {perg.tipo === 'multipla' && (
-          <div className="space-y-2.5">
-            {(perg.config?.opcoes || []).map((opcao: any) => {
-              const isSelected = Array.isArray(val) && val.includes(opcao.id)
-              return (
-                <button
-                  key={opcao.id}
-                  type="button"
-                  onClick={() => handleToggleOpcao(opcao.id)}
-                  onKeyDown={onKeyDown}
-                  className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
-                    isSelected
-                      ? 'bg-primary/10 border-primary text-foreground font-semibold'
-                      : 'bg-card border-border text-muted-foreground hover:border-primary/20 hover:bg-muted/50'
-                  }`}
-                >
-                  <span className="font-semibold text-base">{opcao.texto}</span>
-                  <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                    isSelected ? 'border-primary bg-primary' : 'border-border'
-                  }`}>
-                    {isSelected && <div className="h-2 w-2 rounded-full bg-primary-foreground animate-scale-up"></div>}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {perg.tipo === 'multipla' && (() => {
+          const opcoesList = (perg.config?.origem_opcoes === 'objeto' && objetoRelacionado?.locais && objetoRelacionado.locais.length > 0)
+            ? objetoRelacionado.locais.map((loc: string) => ({ id: loc, texto: loc }))
+            : (perg.config?.opcoes || [])
+
+          return (
+            <div className="space-y-2.5">
+              {opcoesList.map((opcao: any) => {
+                const isSelected = Array.isArray(val) && val.includes(opcao.id)
+                return (
+                  <button
+                    key={opcao.id}
+                    type="button"
+                    onClick={() => handleToggleOpcao(opcao.id)}
+                    onKeyDown={onKeyDown}
+                    className={`w-full text-left px-5 py-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer shadow-sm ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary text-foreground font-semibold'
+                        : 'bg-card border-border text-muted-foreground hover:border-primary/20 hover:bg-muted/50'
+                    }`}
+                  >
+                    <span className="font-semibold text-base">{opcao.texto}</span>
+                    <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                      isSelected ? 'border-primary bg-primary' : 'border-border'
+                    }`}>
+                      {isSelected && <div className="h-2 w-2 rounded-full bg-primary-foreground animate-scale-up"></div>}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
 
         {erro && (
           <p className="text-destructive text-sm font-semibold flex items-center gap-1.5 animate-pulse mt-1">
@@ -843,7 +858,14 @@ export const Responder: React.FC = () => {
             pergunta_id: pergId,
             valor: respostasAtuais[pergId]
           }))
-          await dbService.saveRespostaCompleta(pesqId, deviceFp, itens, cpfConfirmado || undefined)
+          await dbService.saveRespostaCompleta(
+            pesqId, 
+            deviceFp, 
+            itens, 
+            cpfConfirmado || undefined,
+            participanteConfirmado?.id || null,
+            telefoneConfirmado || undefined
+          )
         }
         setRespondeu(true)
         setLoading(false)
@@ -975,22 +997,36 @@ export const Responder: React.FC = () => {
     )
   }
 
-  // ── Tela de CPF (quando pesquisa exige) ──────────────────────────────────────
-  if (etapaCpf && pesquisa) {
+  // ── Tela de Identificação e Confirmação de Participante ──────────────────────
+  if (etapaIdentificacao && pesquisa) {
     const CPF_TESTE = '1111111111x'
 
-    const aplicarMascaraCpf = (v: string) => {
-      const nums = v.replace(/\D/g, '').substring(0, 11)
-      return nums
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    const aplicarMascara = (v: string) => {
+      if (modoIdentificacao === 'celular') {
+        const nums = v.replace(/\D/g, '').substring(0, 11)
+        if (nums.length <= 10) {
+          return nums
+            .replace(/(\d{2})(\d)/, '($1) $2')
+            .replace(/(\d{4})(\d)/, '$1-$2')
+        }
+        return nums
+          .replace(/(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{5})(\d)/, '$1-$2')
+      } else {
+        const nums = v.replace(/\D/g, '').substring(0, 11)
+        return nums
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+      }
     }
 
-    const validarCpf = (cpf: string) => {
-      // backdoor silencioso — sempre passa
-      if (cpf.toLowerCase() === CPF_TESTE) return true
-      const nums = cpf.replace(/\D/g, '')
+    const validarValor = (v: string) => {
+      if (v.toLowerCase() === CPF_TESTE) return true
+      const nums = v.replace(/\D/g, '')
+      if (modoIdentificacao === 'celular') {
+        return nums.length >= 10 && nums.length <= 11
+      }
       if (nums.length !== 11 || /^(\d)\1+$/.test(nums)) return false
       let soma = 0
       for (let i = 0; i < 9; i++) soma += parseInt(nums[i]) * (10 - i)
@@ -1004,74 +1040,220 @@ export const Responder: React.FC = () => {
       return r === parseInt(nums[10])
     }
 
-    const handleConfirmarCpf = async () => {
-      const cpfRaw = cpfDigitado.toLowerCase() === CPF_TESTE ? CPF_TESTE : cpfDigitado.replace(/\D/g, '')
-      if (!validarCpf(cpfDigitado)) {
-        setCpfErro('CPF inválido. Verifique e tente novamente.')
+    const handleBuscar = async () => {
+      const clean = identificadorDigitado.replace(/\D/g, '')
+      if (!validarValor(identificadorDigitado)) {
+        setIdentificadorErro(modoIdentificacao === 'celular' ? 'Telefone inválido. Digite DDD + número.' : 'CPF inválido. Verifique e tente novamente.')
         return
       }
-      setCpfErro('')
-      setCpfCheckando(true)
+      setIdentificadorErro('')
+      setIdentificadorCheckando(true)
+
       try {
-        const jaRespondeu = await dbService.hasCpfResponded(pesquisa.id, cpfRaw)
+        // 1. Verifica se já respondeu
+        const jaRespondeu = await dbService.hasIdentifierResponded(pesquisa.id, clean)
         if (jaRespondeu) {
-          setCpfErro('Este CPF já respondeu esta pesquisa.')
-          setCpfCheckando(false)
+          setIdentificadorErro('Este participante já respondeu esta pesquisa.')
+          setIdentificadorCheckando(false)
           return
         }
-        setCpfConfirmado(cpfRaw)
-        setEtapaCpf(false)
+
+        // 2. Busca participante na base do objeto
+        if (pesquisa.objeto_id) {
+          const part = await dbService.buscarParticipante(pesquisa.objeto_id, clean)
+          if (part) {
+            setParticipanteEncontrado(part)
+            setConfirmandoDados(true)
+            setIdentificadorCheckando(false)
+            return
+          }
+        }
+
+        // Se não encontrou no banco do objeto
+        setIdentificadorErro('Inscrição não localizada com esse número. Verifique os dígitos e tente novamente.')
       } catch (e) {
-        setCpfErro('Erro ao verificar CPF. Tente novamente.')
+        console.error(e)
+        setIdentificadorErro('Erro ao verificar dados. Tente novamente.')
       } finally {
-        setCpfCheckando(false)
+        setIdentificadorCheckando(false)
       }
+    }
+
+    const handleConfirmarParticipante = () => {
+      if (participanteEncontrado) {
+        setParticipanteConfirmado(participanteEncontrado)
+        if (participanteEncontrado.cpf) setCpfConfirmado(participanteEncontrado.cpf)
+        if (participanteEncontrado.telefone) setTelefoneConfirmado(participanteEncontrado.telefone)
+      } else {
+        const clean = identificadorDigitado.replace(/\D/g, '')
+        if (modoIdentificacao === 'cpf') setCpfConfirmado(clean)
+        else setTelefoneConfirmado(clean)
+      }
+      setEtapaIdentificacao(false)
+    }
+
+    const handleContinuarSemVinculo = () => {
+      const clean = identificadorDigitado.replace(/\D/g, '')
+      if (modoIdentificacao === 'cpf') setCpfConfirmado(clean)
+      else setTelefoneConfirmado(clean)
+      setEtapaIdentificacao(false)
     }
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
-        <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl">
+        <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl animate-fade-in">
           <div className="text-center space-y-2">
             <img src={logoImg} alt="Logo" className="h-10 mx-auto mb-4 object-contain" />
             <h2 className="text-xl font-extrabold text-foreground">{pesquisa.titulo}</h2>
-            <p className="text-sm text-muted-foreground">Para continuar, informe seu CPF.</p>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">CPF</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={cpfDigitado}
-              onChange={e => {
-                setCpfErro('')
-                setCpfDigitado(aplicarMascaraCpf(e.target.value))
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') handleConfirmarCpf() }}
-              placeholder="000.000.000-00"
-              maxLength={14}
-              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base tracking-widest"
-              autoFocus
-            />
-            {cpfErro && (
-              <p className="text-xs text-red-500 font-semibold flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> {cpfErro}
+          {confirmandoDados && participanteEncontrado ? (
+            <div className="space-y-6 animate-scale-up">
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <CheckCircle2 className="h-5 w-5" /> Inscrição Localizada!
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-lg font-extrabold text-foreground">
+                    Olá, {participanteEncontrado.nome}!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Confira seus dados de inscrição:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 text-xs border-t border-border/50">
+                  {participanteEncontrado.dados_extras?.distancia && (
+                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Distância</span>
+                      <strong className="text-foreground">{participanteEncontrado.dados_extras.distancia}</strong>
+                    </div>
+                  )}
+                  {participanteEncontrado.dados_extras?.camisa && (
+                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Camisa</span>
+                      <strong className="text-foreground">{participanteEncontrado.dados_extras.camisa}</strong>
+                    </div>
+                  )}
+                  {participanteEncontrado.dados_extras?.peito && (
+                    <div className="bg-background/80 rounded-lg p-2 border border-border/50">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Nº de Peito</span>
+                      <strong className="text-foreground">{participanteEncontrado.dados_extras.peito}</strong>
+                    </div>
+                  )}
+                  {participanteEncontrado.dados_extras?.equipe && (
+                    <div className="bg-background/80 rounded-lg p-2 border border-border/50 col-span-2">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Equipe</span>
+                      <strong className="text-foreground">{participanteEncontrado.dados_extras.equipe}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-center">
+                <p className="text-sm font-semibold text-foreground">
+                  Esse aqui é você mesmo?
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleConfirmarParticipante}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 transition-all cursor-pointer"
+                >
+                  <UserCheck className="h-4 w-4" /> Sim, sou eu! Iniciar Pesquisa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmandoDados(false)
+                    setParticipanteEncontrado(null)
+                  }}
+                  className="w-full text-center text-xs font-semibold text-muted-foreground hover:text-foreground py-2 transition-colors cursor-pointer"
+                >
+                  Não sou eu (digitar outro)
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <p className="text-sm text-muted-foreground text-center">
+                {modoIdentificacao === 'celular'
+                  ? 'Para começar, informe o número de Celular utilizado na sua inscrição:'
+                  : 'Para começar, informe seu CPF de inscrição:'}
               </p>
-            )}
-          </div>
 
-          <button
-            onClick={handleConfirmarCpf}
-            disabled={cpfCheckando || cpfDigitado.length < 11}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
-          >
-            {cpfCheckando ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-            {cpfCheckando ? 'Verificando...' : 'Continuar'}
-          </button>
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {modoIdentificacao === 'celular' ? 'Celular / WhatsApp' : 'CPF'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={identificadorDigitado}
+                    onChange={e => {
+                      setIdentificadorErro('')
+                      setIdentificadorDigitado(aplicarMascara(e.target.value))
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar() }}
+                    placeholder={modoIdentificacao === 'celular' ? '(00) 00000-0000' : '000.000.000-00'}
+                    maxLength={modoIdentificacao === 'celular' ? 15 : 14}
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3.5 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base tracking-widest shadow-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {identificadorErro && (
+                  <div className="space-y-2 mt-2">
+                    <p className="text-xs text-red-500 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 shrink-0" /> {identificadorErro}
+                    </p>
+                    {identificadorErro.includes('não localizada') && (
+                      <button
+                        type="button"
+                        onClick={handleContinuarSemVinculo}
+                        className="text-xs text-primary underline font-medium hover:opacity-80 block"
+                      >
+                        Clique aqui para responder como participante convidado
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBuscar}
+                disabled={identificadorCheckando || identificadorDigitado.length < 9}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {identificadorCheckando ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                {identificadorCheckando ? 'Buscando inscrição...' : 'Buscar Inscrição'}
+              </button>
+
+              <div className="text-center pt-2 border-t border-border/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentificadorErro('')
+                    setIdentificadorDigitado('')
+                    setModoIdentificacao(prev => prev === 'cpf' ? 'celular' : 'cpf')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors underline cursor-pointer"
+                >
+                  {modoIdentificacao === 'cpf'
+                    ? 'Não tem ou não lembra seu CPF? Buscar por Celular'
+                    : 'Prefere buscar pelo CPF? Clique aqui'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -1086,6 +1268,11 @@ export const Responder: React.FC = () => {
       setSubflowStack([])
       setTodasPerguntasSession([])
       setCurrentNodeId('start')
+      setParticipanteConfirmado(null)
+      setParticipanteEncontrado(null)
+      setConfirmandoDados(false)
+      setCpfConfirmado('')
+      setTelefoneConfirmado('')
       loadFlow(token!)
     }
 
