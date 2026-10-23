@@ -54,6 +54,22 @@ export interface Participante {
   created_at?: string
 }
 
+export interface ParticipanteComStatus extends Participante {
+  objeto_nome?: string
+  resposta_id?: string | null
+  resposta_data?: string | null
+  respondeu: boolean
+}
+
+export interface ConfigZApi {
+  id?: string
+  instance_id: string
+  instance_token: string
+  client_token: string
+  mensagem_padrao?: string
+  ativo?: boolean
+}
+
 export interface Lider {
   id: string
   nome: string
@@ -357,6 +373,125 @@ export const dbService = {
       return []
     }
     return (data || []) as Participante[]
+  },
+
+  // --- GESTÃO DE PARTICIPANTES ---
+  async getParticipantes(filtros?: {
+    objetoId?: string
+    status?: 'todos' | 'respondeu' | 'pendente'
+    busca?: string
+  }): Promise<ParticipanteComStatus[]> {
+    let query = supabase
+      .from('vw_participantes_status')
+      .select('*')
+      .order('nome', { ascending: true })
+
+    if (filtros?.objetoId) {
+      query = query.eq('objeto_id', filtros.objetoId)
+    }
+
+    if (filtros?.status === 'respondeu') {
+      query = query.eq('respondeu', true)
+    } else if (filtros?.status === 'pendente') {
+      query = query.eq('respondeu', false)
+    }
+
+    if (filtros?.busca && filtros.busca.trim() !== '') {
+      const b = filtros.busca.trim()
+      const cleanDigits = b.replace(/\D/g, '')
+      if (cleanDigits.length >= 3) {
+        query = query.or(`nome.ilike.%${b}%,cpf.ilike.%${cleanDigits}%,telefone.ilike.%${cleanDigits}%`)
+      } else {
+        query = query.ilike('nome', `%${b}%`)
+      }
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as ParticipanteComStatus[]
+  },
+
+  async saveParticipante(part: Partial<Participante>): Promise<Participante> {
+    if (part.id) {
+      const { data, error } = await supabase
+        .from('participante')
+        .update({
+          nome: part.nome,
+          objeto_id: part.objeto_id,
+          cpf: part.cpf ? part.cpf.replace(/\D/g, '') : null,
+          telefone: part.telefone ? part.telefone.replace(/\D/g, '') : null,
+          email: part.email || null,
+          dados_extras: part.dados_extras || {}
+        })
+        .eq('id', part.id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    } else {
+      const { data, error } = await supabase
+        .from('participante')
+        .insert({
+          nome: part.nome,
+          objeto_id: part.objeto_id,
+          cpf: part.cpf ? part.cpf.replace(/\D/g, '') : null,
+          telefone: part.telefone ? part.telefone.replace(/\D/g, '') : null,
+          email: part.email || null,
+          dados_extras: part.dados_extras || {}
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteParticipante(id: string): Promise<void> {
+    const { error } = await supabase.from('participante').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  // --- CONFIGURAÇÃO Z-API (WHATSAPP) ---
+  async getConfigZApi(): Promise<ConfigZApi | null> {
+    const { data, error } = await supabase
+      .from('config_zapi')
+      .select('*')
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error('Erro ao buscar config Z-API:', error)
+      return null
+    }
+    return data
+  },
+
+  async saveConfigZApi(cfg: Partial<ConfigZApi>): Promise<void> {
+    const current = await this.getConfigZApi()
+    if (current && current.id) {
+      const { error } = await supabase
+        .from('config_zapi')
+        .update({
+          instance_id: cfg.instance_id,
+          instance_token: cfg.instance_token,
+          client_token: cfg.client_token,
+          mensagem_padrao: cfg.mensagem_padrao,
+          ativo: cfg.ativo !== undefined ? cfg.ativo : true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', current.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('config_zapi')
+        .insert({
+          instance_id: cfg.instance_id,
+          instance_token: cfg.instance_token,
+          client_token: cfg.client_token,
+          mensagem_padrao: cfg.mensagem_padrao,
+          ativo: cfg.ativo !== undefined ? cfg.ativo : true
+        })
+      if (error) throw error
+    }
   },
 
   async hasCpfResponded(pesquisaId: string, cpf: string): Promise<boolean> {

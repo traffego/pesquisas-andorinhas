@@ -6,6 +6,7 @@ import logoImg from '../assets/logo.png'
 import { 
   LayoutDashboard, 
   FolderGit2, 
+  Users,
   Users2, 
   ClipboardList, 
   LogOut,
@@ -40,6 +41,7 @@ export const AdminLayout: React.FC = () => {
   const menuItems = [
     { label: 'Painel Geral', path: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Objetos', path: '/admin/objetos', icon: FolderGit2 },
+    { label: 'Participantes', path: '/admin/participantes', icon: Users },
     { label: 'Líderes', path: '/admin/lideres', icon: Users2 },
     { label: 'Fluxos', path: '/admin/fluxos', icon: GitFork },
     { label: 'Pesquisas', path: '/admin/pesquisas', icon: ClipboardList },
