@@ -33,6 +33,7 @@ export const Responder: React.FC = () => {
   const [identificadorErro, setIdentificadorErro] = useState('')
   const [identificadorCheckando, setIdentificadorCheckando] = useState(false)
   const [participanteEncontrado, setParticipanteEncontrado] = useState<Participante | null>(null)
+  const [multiplosParticipantes, setMultiplosParticipantes] = useState<Participante[]>([])
   const [participanteConfirmado, setParticipanteConfirmado] = useState<Participante | null>(null)
   const [confirmandoDados, setConfirmandoDados] = useState(false)
   const [cpfConfirmado, setCpfConfirmado] = useState('')
@@ -1058,12 +1059,19 @@ export const Responder: React.FC = () => {
           return
         }
 
-        // 2. Busca participante na base do objeto
+        // 2. Busca participantes na base do objeto
         if (pesquisa.objeto_id) {
-          const part = await dbService.buscarParticipante(pesquisa.objeto_id, clean)
-          if (part) {
-            setParticipanteEncontrado(part)
+          const parts = await dbService.buscarParticipantes(pesquisa.objeto_id, clean)
+          if (parts.length === 1) {
+            setParticipanteEncontrado(parts[0])
+            setMultiplosParticipantes([])
             setConfirmandoDados(true)
+            setIdentificadorCheckando(false)
+            return
+          } else if (parts.length > 1) {
+            setMultiplosParticipantes(parts)
+            setParticipanteEncontrado(null)
+            setConfirmandoDados(false)
             setIdentificadorCheckando(false)
             return
           }
@@ -1107,7 +1115,57 @@ export const Responder: React.FC = () => {
             <h2 className="text-xl font-extrabold text-foreground">{pesquisa.titulo}</h2>
           </div>
 
-          {confirmandoDados && participanteEncontrado ? (
+          {multiplosParticipantes.length > 1 ? (
+            <div className="space-y-5 animate-scale-up">
+              <div className="text-center space-y-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary block">
+                  Inscrições Localizadas
+                </span>
+                <h3 className="text-xl font-extrabold text-foreground">
+                  Quem está respondendo agora?
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Encontramos {multiplosParticipantes.length} atletas cadastrados com este mesmo número. Selecione o seu nome:
+                </p>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {multiplosParticipantes.map(part => (
+                  <button
+                    key={part.id}
+                    type="button"
+                    onClick={() => {
+                      setParticipanteEncontrado(part)
+                      setMultiplosParticipantes([])
+                      setConfirmandoDados(true)
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border border-border bg-background hover:border-primary/50 hover:bg-muted/40 transition-all flex items-center justify-between group cursor-pointer shadow-sm"
+                  >
+                    <div>
+                      <span className="font-extrabold text-sm text-foreground block group-hover:text-primary transition-colors">
+                        {part.nome}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        🏃 {part.dados_extras?.distancia || '5KM'} {part.dados_extras?.peito ? `• Nº ${part.dados_extras.peito}` : ''}
+                      </span>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMultiplosParticipantes([])
+                  setIdentificadorDigitado('')
+                }}
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2 transition-colors cursor-pointer"
+              >
+                ← Digitar outro número
+              </button>
+            </div>
+          ) : confirmandoDados && participanteEncontrado ? (
             <div className="space-y-6 animate-scale-up">
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-4 text-center sm:text-left shadow-sm">
                 <div className="space-y-1">
@@ -1263,6 +1321,7 @@ export const Responder: React.FC = () => {
       setCurrentNodeId('start')
       setParticipanteConfirmado(null)
       setParticipanteEncontrado(null)
+      setMultiplosParticipantes([])
       setConfirmandoDados(false)
       setCpfConfirmado('')
       setTelefoneConfirmado('')

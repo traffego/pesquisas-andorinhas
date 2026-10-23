@@ -343,15 +343,20 @@ export const dbService = {
   },
 
   async buscarParticipante(objetoId: string, identificador: string): Promise<Participante | null> {
+    const list = await this.buscarParticipantes(objetoId, identificador)
+    return list.length > 0 ? list[0] : null
+  },
+
+  async buscarParticipantes(objetoId: string, identificador: string): Promise<Participante[]> {
     const { data, error } = await supabase.rpc('buscar_participante', {
       p_objeto_id: objetoId,
       p_identificador: identificador
     })
     if (error) {
-      console.error('Erro ao buscar participante:', error)
-      return null
+      console.error('Erro ao buscar participantes:', error)
+      return []
     }
-    return (data && data.length > 0) ? (data[0] as Participante) : null
+    return (data || []) as Participante[]
   },
 
   async hasCpfResponded(pesquisaId: string, cpf: string): Promise<boolean> {
