@@ -18,6 +18,7 @@ import {
   RefreshCw, 
   Key, 
   FolderGit2, 
+  ClipboardList,
   Plus, 
   Edit3, 
   Trash2, 
@@ -27,7 +28,9 @@ import {
   Power,
   RotateCcw,
   Clock,
-  Sparkles
+  Sparkles,
+  Copy,
+  Check
 } from 'lucide-react'
 
 export const WhatsAppPage: React.FC = () => {
@@ -60,18 +63,23 @@ export const WhatsAppPage: React.FC = () => {
   })
   const [msgConfigSalva, setMsgConfigSalva] = useState<string | null>(null)
 
-  // Aba Mensagens por Projeto
+  // Aba Mensagens por Projeto e Pesquisa
   const [objetoSelecionadoMsg, setObjetoSelecionadoMsg] = useState<string>('')
+  const [pesquisaFiltroMsg, setPesquisaFiltroMsg] = useState<string>('')
   const [modalTemplateOpen, setModalTemplateOpen] = useState(false)
   const [templateEdicao, setTemplateEdicao] = useState<Partial<MensagemTemplateObjeto>>({})
   const [salvandoTemplate, setSalvandoTemplate] = useState(false)
 
   // Aba Disparos
   const [objetoDisparo, setObjetoDisparo] = useState<string>('')
+  const [pesquisaDisparoId, setPesquisaDisparoId] = useState<string>('')
   const [templateDisparoId, setTemplateDisparoId] = useState<string>('')
   const [mensagemCustomizadaDisparo, setMensagemCustomizadaDisparo] = useState<string>('')
   const [participantesDisparo, setParticipantesDisparo] = useState<ParticipanteComStatus[]>([])
   const [carregandoParticipantes, setCarregandoParticipantes] = useState(false)
+
+  // Feedback de Cópia
+  const [copiadoLink, setCopiadoLink] = useState(false)
 
   // Modal e Progresso de Disparo em Lote
   const [modalLoteOpen, setModalLoteOpen] = useState(false)
@@ -114,6 +122,12 @@ export const WhatsAppPage: React.FC = () => {
       if (objs.length > 0) {
         setObjetoSelecionadoMsg(objs[0].id)
         setObjetoDisparo(objs[0].id)
+
+        // Inicializa pesquisa do primeiro objeto
+        const pesqsPrimeiro = pesqs.filter(p => p.objeto_id === objs[0].id)
+        if (pesqsPrimeiro.length > 0) {
+          setPesquisaDisparoId(pesqsPrimeiro[0].id)
+        }
       }
 
       if (zcfg) {
@@ -266,28 +280,42 @@ export const WhatsAppPage: React.FC = () => {
     }
   }
 
-  // --- MENSAGENS POR PROJETO ---
+  // --- MENSAGENS POR PROJETO E PESQUISA ---
+  const pesquisasDoObjetoMsg = useMemo(() => {
+    if (!objetoSelecionadoMsg) return []
+    return pesquisas.filter(p => p.objeto_id === objetoSelecionadoMsg)
+  }, [pesquisas, objetoSelecionadoMsg])
+
   const templatesDoObjeto = useMemo(() => {
     if (!objetoSelecionadoMsg) return []
-    return templates.filter(t => t.objeto_id === objetoSelecionadoMsg)
-  }, [templates, objetoSelecionadoMsg])
+    return templates.filter(t => {
+      const matchObj = t.objeto_id === objetoSelecionadoMsg
+      if (!matchObj) return false
+      if (pesquisaFiltroMsg) {
+        return !t.pesquisa_id || t.pesquisa_id === pesquisaFiltroMsg
+      }
+      return true
+    })
+  }, [templates, objetoSelecionadoMsg, pesquisaFiltroMsg])
 
-  const getPesquisaPorObjeto = (objId: string): Pesquisa | undefined => {
-    return pesquisas.find(p => p.objeto_id === objId)
-  }
-
-  const getLinkPesquisaPorObjeto = (objId: string): string => {
-    const pesq = getPesquisaPorObjeto(objId)
-    if (pesq?.token) {
-      return `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}`
+  const getLinkPorPesquisa = (pesqId?: string | null, objId?: string): string => {
+    if (pesqId) {
+      const p = pesquisas.find(item => item.id === pesqId)
+      if (p?.token) return `https://pesquisas-andorinhas.vercel.app/r/${p.token}`
+    }
+    if (objId) {
+      const p = pesquisas.find(item => item.objeto_id === objId)
+      if (p?.token) return `https://pesquisas-andorinhas.vercel.app/r/${p.token}`
     }
     return 'https://pesquisas-andorinhas.vercel.app/'
   }
 
   const handleAbrirNovoTemplate = () => {
     const obj = objetos.find(o => o.id === objetoSelecionadoMsg)
+    const primeiraPesq = pesquisasDoObjetoMsg[0]
     setTemplateEdicao({
       objeto_id: objetoSelecionadoMsg,
+      pesquisa_id: pesquisaFiltroMsg || (primeiraPesq ? primeiraPesq.id : null),
       titulo: 'Novo Convite',
       mensagem: `Olá, {{primeiro_nome}}! Sua opinião sobre a ${obj?.nome || 'nossa corrida'} é muito importante para nós. Responda a pesquisa oficial no link: {{link}}`,
       ativo: true
@@ -336,11 +364,37 @@ export const WhatsAppPage: React.FC = () => {
     }))
   }
 
-  // --- DISPARO EM MASSA POR PROJETO ---
+  // --- DISPARO EM MASSA POR PROJETO E PESQUISA ---
+  const pesquisasDoObjetoDisparo = useMemo(() => {
+    if (!objetoDisparo) return []
+    return pesquisas.filter(p => p.objeto_id === objetoDisparo)
+  }, [pesquisas, objetoDisparo])
+
+  // Quando o objeto de disparo muda, ajusta a pesquisa padrão
   useEffect(() => {
     if (objetoDisparo) {
-      carregarParticipantesDoObjeto(objetoDisparo)
-      const tpls = templates.filter(t => t.objeto_id === objetoDisparo)
+      const pesqs = pesquisas.filter(p => p.objeto_id === objetoDisparo)
+      if (pesqs.length > 0) {
+        setPesquisaDisparoId(pesqs[0].id)
+      } else {
+        setPesquisaDisparoId('')
+      }
+    }
+  }, [objetoDisparo, pesquisas])
+
+  // Recarrega participantes e template sempre que muda o Objeto ou a Pesquisa
+  useEffect(() => {
+    if (objetoDisparo) {
+      carregarParticipantesDoObjeto(objetoDisparo, pesquisaDisparoId)
+      
+      const tpls = templates.filter(t => {
+        if (t.objeto_id !== objetoDisparo) return false
+        if (pesquisaDisparoId && t.pesquisa_id) {
+          return t.pesquisa_id === pesquisaDisparoId
+        }
+        return true
+      })
+
       if (tpls.length > 0) {
         setTemplateDisparoId(tpls[0].id)
         setMensagemCustomizadaDisparo(tpls[0].mensagem)
@@ -350,12 +404,15 @@ export const WhatsAppPage: React.FC = () => {
         setMensagemCustomizadaDisparo(`Olá, {{primeiro_nome}}! Sua opinião sobre a ${obj?.nome || 'nossa corrida'} é fundamental. Responda no link oficial: {{link}}`)
       }
     }
-  }, [objetoDisparo, templates])
+  }, [objetoDisparo, pesquisaDisparoId, templates])
 
-  const carregarParticipantesDoObjeto = async (objId: string) => {
+  const carregarParticipantesDoObjeto = async (objId: string, pesqId?: string) => {
     setCarregandoParticipantes(true)
     try {
-      const data = await dbService.getParticipantes({ objetoId: objId })
+      const data = await dbService.getParticipantes({ 
+        objetoId: objId, 
+        pesquisaId: pesqId || undefined 
+      })
       setParticipantesDisparo(data)
     } catch (err) {
       console.error(err)
@@ -371,6 +428,15 @@ export const WhatsAppPage: React.FC = () => {
       setMensagemCustomizadaDisparo(t.mensagem)
     }
   }
+
+  // Link exato da pesquisa selecionada
+  const linkPesquisaDisparoAtiva = useMemo(() => {
+    if (pesquisaDisparoId) {
+      const pesq = pesquisas.find(p => p.id === pesquisaDisparoId)
+      if (pesq?.token) return `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}`
+    }
+    return getLinkPorPesquisa(null, objetoDisparo)
+  }, [pesquisaDisparoId, objetoDisparo, pesquisas])
 
   const estatisticasDisparo = useMemo(() => {
     const total = participantesDisparo.length
@@ -388,7 +454,6 @@ export const WhatsAppPage: React.FC = () => {
 
   const previewMensagemReal = useMemo(() => {
     const obj = objetos.find(o => o.id === objetoDisparo)
-    const link = getLinkPesquisaPorObjeto(objetoDisparo)
     const atletaExemplo = estatisticasDisparo.listaAptos[0] || {
       id: 'exemplo',
       nome: 'Abnadá Caetano',
@@ -401,10 +466,16 @@ export const WhatsAppPage: React.FC = () => {
     return ZApiService.personalizarMensagem(
       mensagemCustomizadaDisparo,
       atletaExemplo,
-      link,
+      linkPesquisaDisparoAtiva,
       obj?.nome || 'Corrida de Rua'
     )
-  }, [mensagemCustomizadaDisparo, objetoDisparo, objetos, estatisticasDisparo])
+  }, [mensagemCustomizadaDisparo, objetoDisparo, linkPesquisaDisparoAtiva, objetos, estatisticasDisparo])
+
+  const copiarLinkAtivo = () => {
+    navigator.clipboard.writeText(linkPesquisaDisparoAtiva)
+    setCopiadoLink(true)
+    setTimeout(() => setCopiadoLink(false), 2000)
+  }
 
   const handleEnviarTeste = async () => {
     if (!telefoneTeste || telefoneTeste.replace(/\D/g, '').length < 10) {
@@ -446,14 +517,14 @@ export const WhatsAppPage: React.FC = () => {
     }
 
     if (estatisticasDisparo.aptos === 0) {
-      alert('Nenhum participante pendente com telefone válido encontrado para este projeto.')
+      alert('Nenhum participante pendente com telefone válido encontrado para esta pesquisa.')
       return
     }
 
     const obj = objetos.find(o => o.id === objetoDisparo)
-    const link = getLinkPesquisaPorObjeto(objetoDisparo)
+    const pesq = pesquisas.find(p => p.id === pesquisaDisparoId)
 
-    if (!confirm(`Confirmar disparo para ${estatisticasDisparo.aptos} participantes de "${obj?.nome}" com intervalo seguro anti-bloqueio de 6 segundos entre mensagens?`)) {
+    if (!confirm(`Confirmar disparo para ${estatisticasDisparo.aptos} participantes pendentes da pesquisa "${pesq?.titulo || obj?.nome}"?\n\nLink que será enviado: ${linkPesquisaDisparoAtiva}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
       return
     }
 
@@ -478,7 +549,7 @@ export const WhatsAppPage: React.FC = () => {
       const msg = ZApiService.personalizarMensagem(
         mensagemCustomizadaDisparo,
         p,
-        link,
+        linkPesquisaDisparoAtiva,
         obj?.nome || 'Corrida'
       )
 
@@ -530,7 +601,7 @@ export const WhatsAppPage: React.FC = () => {
                 WhatsApp & Z-API
               </h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Conecte seu WhatsApp com QR Code, crie mensagens por projeto e realize disparos em massa.
+                Conecte seu WhatsApp com QR Code, configure mensagens por projeto e pesquisa, e realize disparos segmentados.
               </p>
             </div>
           </div>
@@ -583,7 +654,7 @@ export const WhatsAppPage: React.FC = () => {
           }`}
         >
           <MessageSquare className="h-4 w-4" />
-          2. Mensagens por Projeto
+          2. Mensagens por Projeto & Pesquisa
         </button>
 
         <button
@@ -595,7 +666,7 @@ export const WhatsAppPage: React.FC = () => {
           }`}
         >
           <Send className="h-4 w-4" />
-          3. Central de Disparos
+          3. Central de Disparos Segmentados
         </button>
       </div>
 
@@ -628,7 +699,7 @@ export const WhatsAppPage: React.FC = () => {
                   <div>
                     <h4 className="text-base font-black text-foreground">WhatsApp Conectado!</h4>
                     <p className="text-xs text-muted-foreground max-w-xs mt-1">
-                      Sua instância está pronta para enviar mensagens personalizadas e formulários oficiais.
+                      Sua instância está pronta para enviar mensagens personalizadas e links das pesquisas oficiais.
                     </p>
                   </div>
                   <div className="pt-2 flex flex-wrap gap-2 justify-center">
@@ -817,59 +888,86 @@ export const WhatsAppPage: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* ABA 2: MENSAGENS POR PROJETO */}
+      {/* ABA 2: MENSAGENS POR PROJETO E PESQUISA */}
       {/* ============================================================ */}
       {tabAtiva === 'mensagens' && (
         <div className="space-y-6">
-          {/* Seletor de Projeto */}
-          <div className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex-1 w-full md:w-auto">
-              <label className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Selecione o Projeto / Corrida:
-              </label>
-              <select
-                value={objetoSelecionadoMsg}
-                onChange={e => setObjetoSelecionadoMsg(e.target.value)}
-                className="w-full md:w-96 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              >
-                {objetos.map(obj => (
-                  <option key={obj.id} value={obj.id}>
-                    {obj.nome}
-                  </option>
-                ))}
-              </select>
+          {/* Barra de Filtros: Projeto & Pesquisa */}
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-auto flex-1">
+              {/* Seletor de Projeto */}
+              <div>
+                <label className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                  <FolderGit2 className="h-3.5 w-3.5 text-primary" />
+                  Projeto / Corrida:
+                </label>
+                <select
+                  value={objetoSelecionadoMsg}
+                  onChange={e => {
+                    setObjetoSelecionadoMsg(e.target.value)
+                    setPesquisaFiltroMsg('')
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  {objetos.map(obj => (
+                    <option key={obj.id} value={obj.id}>
+                      {obj.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Seletor de Pesquisa do Projeto */}
+              <div>
+                <label className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5 text-emerald-500" />
+                  Pesquisa do Projeto:
+                </label>
+                <select
+                  value={pesquisaFiltroMsg}
+                  onChange={e => setPesquisaFiltroMsg(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  <option value="">Todas as Pesquisas deste Projeto</option>
+                  {pesquisasDoObjetoMsg.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.titulo} [{p.token}]
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-xl border border-border">
-                Link da Pesquisa deste Projeto:{' '}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+              <div className="text-xs text-muted-foreground bg-muted/50 px-3.5 py-2 rounded-xl border border-border flex items-center gap-2">
+                <span>Link:</span>
                 <a
-                  href={getLinkPesquisaPorObjeto(objetoSelecionadoMsg)}
+                  href={getLinkPorPesquisa(pesquisaFiltroMsg || null, objetoSelecionadoMsg)}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono font-bold text-primary hover:underline inline-flex items-center gap-1"
+                  className="font-mono font-bold text-primary hover:underline inline-flex items-center gap-1 truncate max-w-[220px]"
                 >
-                  {getLinkPesquisaPorObjeto(objetoSelecionadoMsg)} <ExternalLink className="h-3 w-3" />
+                  {getLinkPorPesquisa(pesquisaFiltroMsg || null, objetoSelecionadoMsg)} <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               </div>
 
               <button
                 onClick={handleAbrirNovoTemplate}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-all shadow-md cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-all shadow-md cursor-pointer whitespace-nowrap"
               >
                 <Plus className="h-4 w-4" /> Nova Mensagem
               </button>
             </div>
           </div>
 
-          {/* Lista de Mensagens Cadastradas para o Projeto Selecionado */}
+          {/* Lista de Mensagens Cadastradas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {templatesDoObjeto.length === 0 ? (
               <div className="col-span-2 p-12 text-center bg-card border border-border rounded-2xl space-y-3">
                 <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/40" />
-                <h4 className="text-base font-bold text-foreground">Nenhuma mensagem cadastrada para este projeto</h4>
+                <h4 className="text-base font-bold text-foreground">Nenhuma mensagem cadastrada com os filtros selecionados</h4>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Crie modelos de mensagens para disparar aos inscritos desta corrida ou evento.
+                  Crie modelos de mensagens vinculados ao projeto e à pesquisa desejada.
                 </p>
                 <button
                   onClick={handleAbrirNovoTemplate}
@@ -880,12 +978,11 @@ export const WhatsAppPage: React.FC = () => {
               </div>
             ) : (
               templatesDoObjeto.map(tpl => {
-                const pesq = getPesquisaPorObjeto(tpl.objeto_id)
-                const link = pesq ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}` : 'https://pesquisas-andorinhas.vercel.app/'
+                const linkAtivo = getLinkPorPesquisa(tpl.pesquisa_id, tpl.objeto_id)
                 const previewExemplo = ZApiService.personalizarMensagem(
                   tpl.mensagem,
                   { id: '1', nome: 'Abnadá Caetano', objeto_id: tpl.objeto_id, dados_extras: { peito: '1042', distancia: '5KM' } } as any,
-                  link,
+                  linkAtivo,
                   tpl.objeto_nome || 'Corrida'
                 )
 
@@ -895,9 +992,20 @@ export const WhatsAppPage: React.FC = () => {
                       <div className="flex items-start justify-between gap-2 border-b border-border pb-3">
                         <div>
                           <h4 className="text-base font-black text-foreground">{tpl.titulo}</h4>
-                          <span className="text-[11px] text-muted-foreground">
-                            {tpl.objeto_nome}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] font-semibold text-muted-foreground">
+                              {tpl.objeto_nome}
+                            </span>
+                            {tpl.pesquisa_titulo ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] font-bold">
+                                <ClipboardList className="h-3 w-3" /> {tpl.pesquisa_titulo} ({tpl.pesquisa_token})
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-medium">
+                                Todas as Pesquisas do Projeto
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1">
                           <button
@@ -924,10 +1032,15 @@ export const WhatsAppPage: React.FC = () => {
                     </div>
 
                     <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border">
-                      <span>Tags dinâmicas aplicadas</span>
+                      <span className="truncate max-w-[200px] font-mono text-[10px] text-primary">
+                        {linkAtivo}
+                      </span>
                       <button
                         onClick={() => {
                           setObjetoDisparo(tpl.objeto_id)
+                          if (tpl.pesquisa_id) {
+                            setPesquisaDisparoId(tpl.pesquisa_id)
+                          }
                           setTemplateDisparoId(tpl.id)
                           setMensagemCustomizadaDisparo(tpl.mensagem)
                           setTabAtiva('disparos')
@@ -946,22 +1059,29 @@ export const WhatsAppPage: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* ABA 3: CENTRAL DE DISPAROS POR PROJETO */}
+      {/* ABA 3: CENTRAL DE DISPAROS POR PROJETO E PESQUISA */}
       {/* ============================================================ */}
       {tabAtiva === 'disparos' && (
         <div className="space-y-8">
           {/* Card de Configuração do Disparo */}
           <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6">
-            <h3 className="text-lg font-black text-foreground border-b border-border pb-3">
-              Configurar Disparo em Massa
-            </h3>
+            <div className="border-b border-border pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-foreground">
+                  Configurar Disparo em Massa
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Selecione o projeto, a pesquisa desejada e o modelo de mensagem com link automático.
+                </p>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Seleção do Projeto */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* 1. Seleção do Projeto */}
               <div className="space-y-1.5">
                 <label className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <FolderGit2 className="h-3.5 w-3.5 text-primary" />
-                  1. Projeto / Corrida de Destino:
+                  1. Projeto / Corrida:
                 </label>
                 <select
                   value={objetoDisparo}
@@ -972,16 +1092,36 @@ export const WhatsAppPage: React.FC = () => {
                     <option key={obj.id} value={obj.id}>{obj.nome}</option>
                   ))}
                 </select>
-                <p className="text-[11px] text-muted-foreground">
-                  Cada participante deste projeto receberá o link específico do formulário dele.
-                </p>
               </div>
 
-              {/* Seleção da Mensagem */}
+              {/* 2. Seleção da Pesquisa */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5 text-emerald-500" />
+                  2. Pesquisa de Destino:
+                </label>
+                <select
+                  value={pesquisaDisparoId}
+                  onChange={e => setPesquisaDisparoId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  {pesquisasDoObjetoDisparo.length === 0 ? (
+                    <option value="">Nenhuma pesquisa neste projeto</option>
+                  ) : (
+                    pesquisasDoObjetoDisparo.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.titulo} [{p.token}]
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* 3. Seleção da Mensagem */}
               <div className="space-y-1.5">
                 <label className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                  2. Mensagem Modelo do Projeto:
+                  3. Modelo de Mensagem:
                 </label>
                 <select
                   value={templateDisparoId}
@@ -991,13 +1131,44 @@ export const WhatsAppPage: React.FC = () => {
                   {templates.filter(t => t.objeto_id === objetoDisparo).length === 0 && (
                     <option value="">Mensagem Padrão do Sistema</option>
                   )}
-                  {templates.filter(t => t.objeto_id === objetoDisparo).map(tpl => (
-                    <option key={tpl.id} value={tpl.id}>{tpl.titulo}</option>
-                  ))}
+                  {templates
+                    .filter(t => t.objeto_id === objetoDisparo && (!t.pesquisa_id || t.pesquisa_id === pesquisaDisparoId))
+                    .map(tpl => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.titulo} {tpl.pesquisa_token ? `(${tpl.pesquisa_token})` : ''}
+                      </option>
+                    ))}
                 </select>
-                <p className="text-[11px] text-muted-foreground">
-                  Você pode editar a mensagem antes de disparar logo abaixo.
-                </p>
+              </div>
+            </div>
+
+            {/* Destaque do Link da Pesquisa Selecionada */}
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block">
+                  Link Oficial que será disparado via tag &#123;&#123;link&#125;&#125;:
+                </span>
+                <span className="font-mono text-sm font-black text-foreground break-all">
+                  {linkPesquisaDisparoAtiva}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={copiarLinkAtivo}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-foreground transition-colors cursor-pointer"
+                >
+                  {copiadoLink ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiadoLink ? 'Copiado!' : 'Copiar'}
+                </button>
+                <a
+                  href={linkPesquisaDisparoAtiva}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:bg-primary/90 transition-colors"
+                >
+                  Abrir <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               </div>
             </div>
 
@@ -1027,18 +1198,18 @@ export const WhatsAppPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Painel de Métricas do Projeto Selecionado */}
+            {/* Painel de Métricas da Pesquisa Selecionada */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-muted/40 border border-border">
               <div>
                 <p className="text-[11px] font-extrabold uppercase text-muted-foreground tracking-wider">Total Atletas</p>
                 <p className="text-xl font-black text-foreground">{carregandoParticipantes ? '...' : estatisticasDisparo.total}</p>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Já Responderam</p>
+                <p className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Já Responderam Esta</p>
                 <p className="text-xl font-black text-emerald-600">{carregandoParticipantes ? '...' : estatisticasDisparo.respondidos}</p>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase text-amber-500 tracking-wider">Pendentes</p>
+                <p className="text-[11px] font-extrabold uppercase text-amber-500 tracking-wider">Pendentes Desta</p>
                 <p className="text-xl font-black text-amber-500">{carregandoParticipantes ? '...' : estatisticasDisparo.pendentes}</p>
               </div>
               <div>
@@ -1105,7 +1276,7 @@ export const WhatsAppPage: React.FC = () => {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-sm shadow-lg transition-all cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                Iniciar Disparo em Massa ({estatisticasDisparo.aptos} Atletas)
+                Iniciar Disparo em Massa ({estatisticasDisparo.aptos} Atletas Pendentes)
               </button>
             </div>
           </div>
@@ -1121,10 +1292,10 @@ export const WhatsAppPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
                 <h3 className="text-lg font-black text-foreground">
-                  {templateEdicao.id ? 'Editar Mensagem' : 'Nova Mensagem por Projeto'}
+                  {templateEdicao.id ? 'Editar Mensagem' : 'Nova Mensagem por Projeto e Pesquisa'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Configure o texto e personalize com tags dinâmicas
+                  Configure o texto, selecione a pesquisa específica e personalize com tags dinâmicas
                 </p>
               </div>
               <button
@@ -1136,20 +1307,52 @@ export const WhatsAppPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSalvarTemplate} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
-                  Projeto / Corrida Vinculada:
-                </label>
-                <select
-                  value={templateEdicao.objeto_id}
-                  onChange={e => setTemplateEdicao({ ...templateEdicao, objeto_id: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  required
-                >
-                  {objetos.map(obj => (
-                    <option key={obj.id} value={obj.id}>{obj.nome}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Projeto */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                    Projeto / Corrida:
+                  </label>
+                  <select
+                    value={templateEdicao.objeto_id}
+                    onChange={e => {
+                      const newObj = e.target.value
+                      const pesqs = pesquisas.filter(p => p.objeto_id === newObj)
+                      setTemplateEdicao({ 
+                        ...templateEdicao, 
+                        objeto_id: newObj,
+                        pesquisa_id: pesqs[0]?.id || null
+                      })
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    required
+                  >
+                    {objetos.map(obj => (
+                      <option key={obj.id} value={obj.id}>{obj.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Pesquisa Específica */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                    Pesquisa Vinculada:
+                  </label>
+                  <select
+                    value={templateEdicao.pesquisa_id || ''}
+                    onChange={e => setTemplateEdicao({ ...templateEdicao, pesquisa_id: e.target.value || null })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="">Todas / Padrão do Projeto</option>
+                    {pesquisas
+                      .filter(p => p.objeto_id === templateEdicao.objeto_id)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.titulo} [{p.token}]
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -1192,16 +1395,21 @@ export const WhatsAppPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Preview Dinâmico */}
+              {/* Preview Dinâmico com a Pesquisa Escolhida */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase">
-                  Preview do Balão WhatsApp:
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase">
+                    Preview do Balão WhatsApp:
+                  </label>
+                  <span className="font-mono text-[10px] text-primary truncate max-w-[280px]">
+                    {getLinkPorPesquisa(templateEdicao.pesquisa_id, templateEdicao.objeto_id)}
+                  </span>
+                </div>
                 <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-foreground font-sans leading-relaxed whitespace-pre-wrap">
                   {ZApiService.personalizarMensagem(
                     templateEdicao.mensagem || '',
                     { id: '1', nome: 'Abnadá Caetano', objeto_id: templateEdicao.objeto_id || '', dados_extras: { peito: '1042', distancia: '5KM' } } as any,
-                    getLinkPesquisaPorObjeto(templateEdicao.objeto_id || ''),
+                    getLinkPorPesquisa(templateEdicao.pesquisa_id, templateEdicao.objeto_id),
                     objetos.find(o => o.id === templateEdicao.objeto_id)?.nome || 'Corrida'
                   )}
                 </div>

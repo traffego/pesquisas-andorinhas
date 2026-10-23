@@ -74,6 +74,9 @@ export interface MensagemTemplateObjeto {
   id: string
   objeto_id: string
   objeto_nome?: string
+  pesquisa_id?: string | null
+  pesquisa_titulo?: string
+  pesquisa_token?: string
   titulo: string
   mensagem: string
   ativo: boolean
@@ -389,6 +392,7 @@ export const dbService = {
   // --- GESTÃO DE PARTICIPANTES ---
   async getParticipantes(filtros?: {
     objetoId?: string
+    pesquisaId?: string
     status?: 'todos' | 'respondeu' | 'pendente'
     busca?: string
   }): Promise<ParticipanteComStatus[]> {
@@ -399,12 +403,6 @@ export const dbService = {
 
     if (filtros?.objetoId) {
       query = query.eq('objeto_id', filtros.objetoId)
-    }
-
-    if (filtros?.status === 'respondeu') {
-      query = query.eq('respondeu', true)
-    } else if (filtros?.status === 'pendente') {
-      query = query.eq('respondeu', false)
     }
 
     if (filtros?.busca && filtros.busca.trim() !== '') {
@@ -419,7 +417,38 @@ export const dbService = {
 
     const { data, error } = await query
     if (error) throw error
-    return (data || []) as ParticipanteComStatus[]
+    let list = (data || []) as ParticipanteComStatus[]
+
+    // Se uma pesquisa específica for fornecida, recalcula 'respondeu' exclusivamente para essa pesquisa
+    if (filtros?.pesquisaId) {
+      const { data: respData } = await supabase
+        .from('resposta')
+        .select('participante_id, cpf, id, created_at')
+        .eq('pesquisa_id', filtros.pesquisaId)
+
+      const respList = respData || []
+      list = list.map(p => {
+        const pCpfClean = (p.cpf || '').replace(/\D/g, '')
+        const rMatch = respList.find(r => 
+          (r.participante_id && r.participante_id === p.id) ||
+          (pCpfClean && r.cpf && r.cpf.replace(/\D/g, '') === pCpfClean)
+        )
+        return {
+          ...p,
+          respondeu: !!rMatch,
+          resposta_id: rMatch?.id || null,
+          resposta_data: rMatch?.created_at || null
+        }
+      })
+    }
+
+    if (filtros?.status === 'respondeu') {
+      list = list.filter(p => p.respondeu)
+    } else if (filtros?.status === 'pendente') {
+      list = list.filter(p => !p.respondeu)
+    }
+
+    return list
   },
 
   async saveParticipante(part: Partial<Participante>): Promise<Participante> {
@@ -505,15 +534,18 @@ export const dbService = {
     }
   },
 
-  // --- MENSAGENS / TEMPLATES POR PROJETO (OBJETO) ---
-  async getMensagensTemplates(objetoId?: string): Promise<MensagemTemplateObjeto[]> {
+  // --- MENSAGENS / TEMPLATES POR PROJETO E PESQUISA ---
+  async getMensagensTemplates(objetoId?: string, pesquisaId?: string): Promise<MensagemTemplateObjeto[]> {
     let query = supabase
       .from('mensagem_template_objeto')
-      .select('*, objeto:objeto_id(nome)')
+      .select('*, objeto:objeto_id(nome), pesquisa:pesquisa_id(titulo, token)')
       .order('created_at', { ascending: false })
 
     if (objetoId) {
       query = query.eq('objeto_id', objetoId)
+    }
+    if (pesquisaId) {
+      query = query.eq('pesquisa_id', pesquisaId)
     }
 
     const { data, error } = await query
@@ -523,6 +555,9 @@ export const dbService = {
       id: t.id,
       objeto_id: t.objeto_id,
       objeto_nome: t.objeto?.nome || '',
+      pesquisa_id: t.pesquisa_id || null,
+      pesquisa_titulo: t.pesquisa?.titulo || '',
+      pesquisa_token: t.pesquisa?.token || '',
       titulo: t.titulo,
       mensagem: t.mensagem,
       ativo: t.ativo,
@@ -537,6 +572,7 @@ export const dbService = {
         .from('mensagem_template_objeto')
         .update({
           objeto_id: template.objeto_id,
+          pesquisa_id: template.pesquisa_id || null,
           titulo: template.titulo,
           mensagem: template.mensagem,
           ativo: template.ativo !== undefined ? template.ativo : true,
@@ -552,6 +588,7 @@ export const dbService = {
         .from('mensagem_template_objeto')
         .insert({
           objeto_id: template.objeto_id,
+          pesquisa_id: template.pesquisa_id || null,
           titulo: template.titulo,
           mensagem: template.mensagem,
           ativo: template.ativo !== undefined ? template.ativo : true
