@@ -352,12 +352,24 @@ export const dbService = {
     participanteId?: string | null,
     telefone?: string | null
   ): Promise<void> {
+    const cleanCpf = cpf ? cpf.replace(/\D/g, '') : null
+    const cleanTel = telefone ? telefone.replace(/\D/g, '') : null
+
+    // Dupla validação anti-duplicidade no momento da gravação
+    if (cleanCpf || cleanTel || participanteId) {
+      const iden = cleanCpf || cleanTel || ''
+      const jaResp = await this.hasIdentifierResponded(pesquisaId, iden, participanteId)
+      if (jaResp) {
+        throw new Error('Este participante já registrou uma resposta para esta pesquisa.')
+      }
+    }
+
     const { data: respData, error: respError } = await supabase.from('resposta').insert({
       pesquisa_id: pesquisaId,
       fingerprint,
-      ...(cpf ? { cpf: cpf.replace(/\D/g, '') } : {}),
+      ...(cleanCpf ? { cpf: cleanCpf } : {}),
       ...(participanteId ? { participante_id: participanteId } : {}),
-      ...(telefone ? { telefone: telefone.replace(/\D/g, '') } : {})
+      ...(cleanTel ? { telefone: cleanTel } : {})
     }).select().single()
 
     if (respError) throw respError
