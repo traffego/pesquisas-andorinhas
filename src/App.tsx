@@ -6,6 +6,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Dashboard } from './pages/admin/Dashboard'
 import { Objetos } from './pages/admin/Objetos'
 import { Participantes } from './pages/admin/Participantes'
+import { WhatsAppPage } from './pages/admin/WhatsApp'
 import { Lideres } from './pages/admin/Lideres'
 import { Fluxos } from './pages/admin/Fluxos'
 import { Pesquisas } from './pages/admin/Pesquisas'
@@ -38,6 +39,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="objetos" element={<Objetos />} />
           <Route path="participantes" element={<Participantes />} />
+          <Route path="whatsapp" element={<WhatsAppPage />} />
           <Route path="lideres" element={<Lideres />} />
           <Route path="fluxos" element={<Fluxos />} />
           <Route path="fluxos/:id/builder" element={<Builder />} />

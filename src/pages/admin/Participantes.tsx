@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { 
   dbService, 
   type Objeto, 
@@ -17,14 +18,12 @@ import {
   Edit2, 
   Trash2, 
   MessageSquare, 
-  Settings, 
   Send, 
   X, 
   AlertCircle, 
   TrendingUp,
   Download,
-  Phone,
-  ShieldCheck
+  Phone
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -42,9 +41,7 @@ export const Participantes: React.FC = () => {
 
   // Modais
   const [modalEditOpen, setModalEditOpen] = useState(false)
-  const [modalZApiOpen, setModalZApiOpen] = useState(false)
   const [modalEnvioIndividualOpen, setModalEnvioIndividualOpen] = useState(false)
-  const [modalLoteOpen, setModalLoteOpen] = useState(false)
 
   // Participante em edição
   const [participanteAtual, setParticipanteAtual] = useState<Partial<Participante>>({})
@@ -55,24 +52,6 @@ export const Participantes: React.FC = () => {
   const [msgIndividual, setMsgIndividual] = useState('')
   const [enviandoIndividual, setEnviandoIndividual] = useState(false)
   const [statusEnvioIndividual, setStatusEnvioIndividual] = useState<{ sucesso?: boolean; msg?: string } | null>(null)
-
-  // Config Z-API form
-  const [formZApi, setFormZApi] = useState<ConfigZApi>({
-    instance_id: '',
-    instance_token: '',
-    client_token: '',
-    mensagem_padrao: 'Olá, {{primeiro_nome}}! Sua opinião sobre a {{corrida}} é fundamental para nós. Responda a pesquisa oficial no link: {{link}}'
-  })
-  const [salvandoZApi, setSalvandoZApi] = useState(false)
-
-  // Disparo em lote
-  const [emLoteProcessando, setEmLoteProcessando] = useState(false)
-  const [progressoLote, setProgressoLote] = useState<{ total: number; atual: number; enviados: number; erros: number }>({
-    total: 0,
-    atual: 0,
-    enviados: 0,
-    erros: 0
-  })
 
   useEffect(() => {
     carregarDadosIniciais()
@@ -90,12 +69,6 @@ export const Participantes: React.FC = () => {
       setPesquisas(pesqs)
       if (zcfg) {
         setConfigZApi(zcfg)
-        setFormZApi({
-          instance_id: zcfg.instance_id || '',
-          instance_token: zcfg.instance_token || '',
-          client_token: zcfg.client_token || '',
-          mensagem_padrao: zcfg.mensagem_padrao || formZApi.mensagem_padrao
-        })
       }
       await carregarParticipantes()
     } catch (err) {
@@ -194,22 +167,6 @@ export const Participantes: React.FC = () => {
     }
   }
 
-  // --- SALVAR CONFIG Z-API ---
-  const handleSalvarZApi = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSalvandoZApi(true)
-    try {
-      await dbService.saveConfigZApi(formZApi)
-      setConfigZApi(formZApi)
-      setModalZApiOpen(false)
-      alert('Configuração Z-API salva com sucesso!')
-    } catch (err: any) {
-      alert('Erro ao salvar configuração: ' + err.message)
-    } finally {
-      setSalvandoZApi(false)
-    }
-  }
-
   // --- DISPARO INDIVIDUAL WHATSAPP ---
   const handleAbrirEnvioIndividual = (p: ParticipanteComStatus) => {
     const pesq = getPesquisaPorObjeto(p.objeto_id)
@@ -217,7 +174,7 @@ export const Participantes: React.FC = () => {
       ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}`
       : 'https://pesquisas-andorinhas.vercel.app/'
     
-    const template = configZApi?.mensagem_padrao || formZApi.mensagem_padrao!
+    const template = configZApi?.mensagem_padrao || 'Olá, {{primeiro_nome}}! Sua opinião sobre a {{corrida}} é fundamental para nós. Responda a pesquisa oficial no link: {{link}}'
     const msg = ZApiService.personalizarMensagem(template, p, link, p.objeto_nome || 'Corrida de Rua')
     
     setPartParaEnvio(p)
@@ -252,64 +209,6 @@ export const Participantes: React.FC = () => {
     } finally {
       setEnviandoIndividual(false)
     }
-  }
-
-  // --- DISPARO EM LOTE (ANTI-BLOQUEIO) ---
-  const pendentesParaEnvio = useMemo(() => {
-    return participantes.filter(p => !p.respondeu && p.telefone && p.telefone.trim().length >= 10)
-  }, [participantes])
-
-  const handleIniciarDisparoLote = async () => {
-    if (!ZApiService.isConfigValida(configZApi)) {
-      alert('Por favor, configure as credenciais da Z-API antes de realizar disparos em lote.')
-      setModalZApiOpen(true)
-      return
-    }
-
-    if (pendentesParaEnvio.length === 0) {
-      alert('Nenhum participante pendente com telefone válido encontrado para os filtros atuais.')
-      return
-    }
-
-    if (!confirm(`Deseja iniciar o disparo para ${pendentesParaEnvio.length} participantes pendentes com intervalo de 6 segundos entre mensagens (Regra Anti-Bloqueio)?`)) {
-      return
-    }
-
-    setEmLoteProcessando(true)
-    setModalLoteOpen(true)
-    setProgressoLote({
-      total: pendentesParaEnvio.length,
-      atual: 0,
-      enviados: 0,
-      erros: 0
-    })
-
-    const template = configZApi?.mensagem_padrao || formZApi.mensagem_padrao!
-
-    for (let i = 0; i < pendentesParaEnvio.length; i++) {
-      const p = pendentesParaEnvio[i]
-      const pesq = getPesquisaPorObjeto(p.objeto_id)
-      const link = pesq ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}` : 'https://pesquisas-andorinhas.vercel.app/'
-      const msg = ZApiService.personalizarMensagem(template, p, link, p.objeto_nome || 'Corrida de Rua')
-
-      try {
-        const res = await ZApiService.enviarTexto(configZApi!, p.telefone!, msg)
-        if (res.sucesso) {
-          setProgressoLote(prev => ({ ...prev, atual: i + 1, enviados: prev.enviados + 1 }))
-        } else {
-          setProgressoLote(prev => ({ ...prev, atual: i + 1, erros: prev.erros + 1 }))
-        }
-      } catch (e) {
-        setProgressoLote(prev => ({ ...prev, atual: i + 1, erros: prev.erros + 1 }))
-      }
-
-      // Intervalo anti-bloqueio canônico (6 segundos) se não for o último
-      if (i < pendentesParaEnvio.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 6000))
-      }
-    }
-
-    setEmLoteProcessando(false)
   }
 
   // --- EXPORTAR EXCEL ---
@@ -348,20 +247,13 @@ export const Participantes: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setModalZApiOpen(true)}
+          <Link
+            to="/admin/whatsapp"
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-sm font-semibold text-foreground transition-all cursor-pointer shadow-sm"
           >
-            <Settings className="h-4 w-4 text-emerald-500" />
-            <span>Z-API {ZApiService.isConfigValida(configZApi) ? '✓ Conectado' : 'Configurar'}</span>
-          </button>
-
-          <button
-            onClick={handleIniciarDisparoLote}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-          >
-            <Send className="h-4 w-4" /> Disparar WhatsApp ({pendentesParaEnvio.length})
-          </button>
+            <MessageSquare className="h-4 w-4 text-emerald-500" />
+            <span>WhatsApp & Disparos</span>
+          </Link>
 
           <button
             onClick={handleNovoParticipante}
@@ -716,94 +608,7 @@ export const Participantes: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: CONFIGURAÇÃO Z-API (WHATSAPP) */}
-      {modalZApiOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div>
-                <h3 className="text-lg font-black text-foreground flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-emerald-500" /> Integração Z-API (WhatsApp)
-                </h3>
-                <p className="text-xs text-muted-foreground">Configurações canônicas de autenticação Z-API</p>
-              </div>
-              <button onClick={() => setModalZApiOpen(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSalvarZApi} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">ID da Instância (Instance ID) *</label>
-                <input
-                  type="text"
-                  required
-                  value={formZApi.instance_id}
-                  onChange={e => setFormZApi(prev => ({ ...prev, instance_id: e.target.value }))}
-                  placeholder="Ex: 3B7... ou seu ID de instância"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-foreground font-mono text-xs focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Token da Instância (Instance Token) *</label>
-                <input
-                  type="password"
-                  required
-                  value={formZApi.instance_token}
-                  onChange={e => setFormZApi(prev => ({ ...prev, instance_token: e.target.value }))}
-                  placeholder="Token secreto da instância"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-foreground font-mono text-xs focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Client-Token de Segurança *</label>
-                <input
-                  type="password"
-                  required
-                  value={formZApi.client_token}
-                  onChange={e => setFormZApi(prev => ({ ...prev, client_token: e.target.value }))}
-                  placeholder="Header Client-Token da aba Segurança da Z-API"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-foreground font-mono text-xs focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Template de Mensagem Padrão</label>
-                <textarea
-                  rows={3}
-                  value={formZApi.mensagem_padrao}
-                  onChange={e => setFormZApi(prev => ({ ...prev, mensagem_padrao: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-foreground text-xs focus:ring-2 focus:ring-primary/20"
-                />
-                <span className="text-[11px] text-muted-foreground block mt-1">
-                  Tags disponíveis: <code>{"{{primeiro_nome}}"}</code>, <code>{"{{nome}}"}</code>, <code>{"{{corrida}}"}</code>, <code>{"{{link}}"}</code>
-                </span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setModalZApiOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted text-sm font-semibold text-foreground cursor-pointer"
-                >
-                  Fechar
-                </button>
-                <button
-                  type="submit"
-                  disabled={salvandoZApi}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold shadow-md shadow-emerald-600/20 hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  {salvandoZApi ? 'Salvando...' : 'Salvar Credenciais Z-API'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: ENVIO INDIVIDUAL */}
+      {/* MODAL 2: ENVIO INDIVIDUAL */}
       {modalEnvioIndividualOpen && partParaEnvio && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-4">
@@ -867,75 +672,6 @@ export const Participantes: React.FC = () => {
                 {enviandoIndividual ? 'Disparando...' : 'Enviar Agora'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 4: DISPARO EM LOTE COM ANTI-BLOQUEIO */}
-      {modalLoteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div>
-                <h3 className="text-base font-black text-foreground flex items-center gap-2">
-                  <Send className="h-4 w-4 text-emerald-500" /> Disparo em Lote com Anti-Bloqueio
-                </h3>
-                <p className="text-xs text-muted-foreground">Fila controlada (intervalo de 6s entre mensagens)</p>
-              </div>
-              {!emLoteProcessando && (
-                <button onClick={() => setModalLoteOpen(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-4 text-center py-2">
-              <div className="space-y-1">
-                <span className="text-3xl font-black text-foreground">
-                  {progressoLote.atual} / {progressoLote.total}
-                </span>
-                <p className="text-xs text-muted-foreground">Participantes processados</p>
-              </div>
-
-              {/* Barra de Progresso */}
-              <div className="w-full bg-muted rounded-full h-3 overflow-hidden border border-border">
-                <div 
-                  className="bg-emerald-600 h-full transition-all duration-300"
-                  style={{ width: `${progressoLote.total > 0 ? (progressoLote.atual / progressoLote.total) * 100 : 0}%` }}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs pt-2">
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 font-bold">
-                  ✓ Enviados: {progressoLote.enviados}
-                </div>
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 font-bold">
-                  ✕ Falhas: {progressoLote.erros}
-                </div>
-              </div>
-
-              {emLoteProcessando ? (
-                <p className="text-xs text-amber-500 font-semibold animate-pulse">
-                  Aguarde... Enviando com proteção anti-bloqueio Z-API.
-                </p>
-              ) : (
-                <p className="text-xs text-emerald-600 font-bold">
-                  🎉 Disparo em lote finalizado com sucesso!
-                </p>
-              )}
-            </div>
-
-            {!emLoteProcessando && (
-              <div className="flex justify-end pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setModalLoteOpen(false)}
-                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md cursor-pointer"
-                >
-                  Concluir
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

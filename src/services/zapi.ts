@@ -7,6 +7,19 @@ export interface EnvioResultado {
   erro?: string
 }
 
+export interface StatusZApiResultado {
+  sucesso: boolean
+  connected: boolean
+  smartphoneConnected?: boolean
+  error?: string
+}
+
+export interface QrCodeResultado {
+  sucesso: boolean
+  qrCodeBase64?: string
+  erro?: string
+}
+
 export class ZApiService {
   /**
    * Higieniza e formata o telefone para o padrão internacional exigido pelo WhatsApp (DDI 55 + DDD + número)
@@ -31,6 +44,152 @@ export class ZApiService {
       config.client_token &&
       config.client_token.trim() !== ''
     )
+  }
+
+  /**
+   * Consulta o status da conexão da instância com o WhatsApp
+   * Endpoint: GET https://api.z-api.io/instances/{instanceId}/token/{token}/status
+   */
+  static async obterStatus(config: ConfigZApi): Promise<StatusZApiResultado> {
+    if (!this.isConfigValida(config)) {
+      return { sucesso: false, connected: false, error: 'Credenciais Z-API não configuradas.' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/status`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Client-Token': config.client_token.trim()
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return {
+          sucesso: false,
+          connected: false,
+          error: data?.message || data?.error || `Erro Z-API [HTTP ${response.status}]`
+        }
+      }
+
+      return {
+        sucesso: true,
+        connected: !!data.connected,
+        smartphoneConnected: !!data.smartphoneConnected
+      }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        connected: false,
+        error: err?.message || 'Falha ao consultar status da Z-API.'
+      }
+    }
+  }
+
+  /**
+   * Obtém a imagem do QR Code em Base64 para conectar o aparelho
+   * Endpoint: GET https://api.z-api.io/instances/{instanceId}/token/{token}/qr-code/image
+   */
+  static async obterQrCode(config: ConfigZApi): Promise<QrCodeResultado> {
+    if (!this.isConfigValida(config)) {
+      return { sucesso: false, erro: 'Preencha o Instance ID, Token e Client-Token antes de gerar o QR Code.' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/qr-code/image`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Client-Token': config.client_token.trim()
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return {
+          sucesso: false,
+          erro: data?.message || data?.error || `Erro ao obter QR Code [HTTP ${response.status}]`
+        }
+      }
+
+      let base64 = data.value || ''
+      if (base64 && !base64.startsWith('data:image')) {
+        base64 = `data:image/png;base64,${base64}`
+      }
+
+      return {
+        sucesso: true,
+        qrCodeBase64: base64
+      }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        erro: err?.message || 'Falha na comunicação com Z-API ao buscar QR Code.'
+      }
+    }
+  }
+
+  /**
+   * Reinicia o processo da instância Z-API sem deslogar
+   * Endpoint: GET https://api.z-api.io/instances/{instanceId}/token/{token}/restart
+   */
+  static async reiniciarInstancia(config: ConfigZApi): Promise<{ sucesso: boolean; erro?: string }> {
+    if (!this.isConfigValida(config)) {
+      return { sucesso: false, erro: 'Credenciais Z-API não configuradas.' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/restart`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Client-Token': config.client_token.trim()
+        }
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        return { sucesso: false, erro: data?.message || `Erro [HTTP ${response.status}]` }
+      }
+      return { sucesso: true }
+    } catch (err: any) {
+      return { sucesso: false, erro: err?.message || 'Falha ao reiniciar instância.' }
+    }
+  }
+
+  /**
+   * Desconecta o WhatsApp da instância
+   * Endpoint: GET https://api.z-api.io/instances/{instanceId}/token/{token}/disconnect
+   */
+  static async desconectarInstancia(config: ConfigZApi): Promise<{ sucesso: boolean; erro?: string }> {
+    if (!this.isConfigValida(config)) {
+      return { sucesso: false, erro: 'Credenciais Z-API não configuradas.' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/disconnect`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Client-Token': config.client_token.trim()
+        }
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        return { sucesso: false, erro: data?.message || `Erro [HTTP ${response.status}]` }
+      }
+      return { sucesso: true }
+    } catch (err: any) {
+      return { sucesso: false, erro: err?.message || 'Falha ao desconectar instância.' }
+    }
   }
 
   /**

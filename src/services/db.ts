@@ -70,6 +70,17 @@ export interface ConfigZApi {
   ativo?: boolean
 }
 
+export interface MensagemTemplateObjeto {
+  id: string
+  objeto_id: string
+  objeto_nome?: string
+  titulo: string
+  mensagem: string
+  ativo: boolean
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Lider {
   id: string
   nome: string
@@ -492,6 +503,69 @@ export const dbService = {
         })
       if (error) throw error
     }
+  },
+
+  // --- MENSAGENS / TEMPLATES POR PROJETO (OBJETO) ---
+  async getMensagensTemplates(objetoId?: string): Promise<MensagemTemplateObjeto[]> {
+    let query = supabase
+      .from('mensagem_template_objeto')
+      .select('*, objeto:objeto_id(nome)')
+      .order('created_at', { ascending: false })
+
+    if (objetoId) {
+      query = query.eq('objeto_id', objetoId)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return (data || []).map((t: any) => ({
+      id: t.id,
+      objeto_id: t.objeto_id,
+      objeto_nome: t.objeto?.nome || '',
+      titulo: t.titulo,
+      mensagem: t.mensagem,
+      ativo: t.ativo,
+      created_at: t.created_at,
+      updated_at: t.updated_at
+    }))
+  },
+
+  async saveMensagemTemplate(template: Partial<MensagemTemplateObjeto>): Promise<MensagemTemplateObjeto> {
+    if (template.id) {
+      const { data, error } = await supabase
+        .from('mensagem_template_objeto')
+        .update({
+          objeto_id: template.objeto_id,
+          titulo: template.titulo,
+          mensagem: template.mensagem,
+          ativo: template.ativo !== undefined ? template.ativo : true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', template.id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    } else {
+      const { data, error } = await supabase
+        .from('mensagem_template_objeto')
+        .insert({
+          objeto_id: template.objeto_id,
+          titulo: template.titulo,
+          mensagem: template.mensagem,
+          ativo: template.ativo !== undefined ? template.ativo : true
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteMensagemTemplate(id: string): Promise<void> {
+    const { error } = await supabase.from('mensagem_template_objeto').delete().eq('id', id)
+    if (error) throw error
   },
 
   async hasCpfResponded(pesquisaId: string, cpf: string): Promise<boolean> {
