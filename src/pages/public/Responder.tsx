@@ -1201,29 +1201,13 @@ export const Responder: React.FC = () => {
                 </div>
               </div>
 
-              <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">
-                  Esse aqui é você mesmo?
-                </p>
-              </div>
-
-              <div className="space-y-2.5">
+              <div className="pt-2">
                 <button
                   type="button"
                   onClick={handleConfirmarParticipante}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-90 transition-all cursor-pointer"
                 >
-                  <UserCheck className="h-4 w-4" /> Sim, sou eu! Iniciar Pesquisa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmandoDados(false)
-                    setParticipanteEncontrado(null)
-                  }}
-                  className="w-full text-center text-xs font-semibold text-muted-foreground hover:text-foreground py-2 transition-colors cursor-pointer"
-                >
-                  Não sou eu (digitar outro)
+                  <UserCheck className="h-4 w-4" /> Iniciar Pesquisa
                 </button>
               </div>
             </div>
