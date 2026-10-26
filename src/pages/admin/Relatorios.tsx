@@ -23,10 +23,100 @@ import {
   X, 
   Trash2, 
   TrendingUp, 
-  MapPin 
+  MapPin,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']
+
+// Helpers para Capa Sintética Adaptável a Qualquer Formulário
+function getResumoLinha(r: any, perguntasList: Pergunta[]) {
+  const badges: { label: string; cor: string }[] = []
+
+  const pIdade = perguntasList.find(p => {
+    const t = p.titulo.toLowerCase()
+    return t.includes('faixa et') || t.includes('idade')
+  })
+  const pSexo = perguntasList.find(p => {
+    const t = p.titulo.toLowerCase()
+    return t.includes('sexo') || t.includes('gênero') || t.includes('genero')
+  })
+  const pEstreante = perguntasList.find(p => {
+    const t = p.titulo.toLowerCase()
+    return t.includes('primeira vez') || t.includes('estreante') || t.includes('primeira particip')
+  })
+
+  if (pIdade && r.valores[pIdade.id]) {
+    const val = r.valores[pIdade.id]
+    const opcao = pIdade.config?.opcoes?.find(o => o.id === (Array.isArray(val) ? val[0] : val))?.texto || (Array.isArray(val) ? val[0] : val)
+    if (opcao) badges.push({ label: String(opcao), cor: 'bg-blue-500/10 text-blue-600 border-blue-500/20' })
+  }
+
+  if (pSexo && r.valores[pSexo.id]) {
+    const val = r.valores[pSexo.id]
+    const opcao = pSexo.config?.opcoes?.find(o => o.id === (Array.isArray(val) ? val[0] : val))?.texto || (Array.isArray(val) ? val[0] : val)
+    if (opcao) badges.push({ label: String(opcao), cor: 'bg-zinc-500/10 text-foreground border-border' })
+  }
+
+  if (pEstreante && r.valores[pEstreante.id]) {
+    const val = r.valores[pEstreante.id]
+    const opcao = pEstreante.config?.opcoes?.find(o => o.id === (Array.isArray(val) ? val[0] : val))?.texto || (Array.isArray(val) ? val[0] : val)
+    const isSim = String(opcao).toLowerCase().startsWith('sim')
+    if (opcao) badges.push({ 
+      label: isSim ? '⭐ Estreante' : 'Veterano', 
+      cor: isSim ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+    })
+  }
+
+  // Se não encontrou demográficas, seleciona as primeiras respostas objetivas
+  if (badges.length === 0) {
+    for (const p of perguntasList) {
+      if (badges.length >= 2) break
+      const val = r.valores[p.id]
+      if (val !== undefined && val !== null && val !== '') {
+        let texto = ''
+        if (p.tipo === 'multipla') {
+          const arr = Array.isArray(val) ? val : [val]
+          texto = arr.map(v => p.config?.opcoes?.find(o => o.id === v)?.texto || v).join(', ')
+        } else if (p.tipo !== 'textarea') {
+          texto = String(val)
+        }
+        if (texto && texto.length <= 35) {
+          badges.push({ label: texto, cor: 'bg-primary/10 text-primary border-primary/20' })
+        }
+      }
+    }
+  }
+
+  return badges
+}
+
+function getAvaliacaoLinha(r: any, perguntasList: Pergunta[]) {
+  const pAprov = perguntasList.find(p => {
+    const t = p.titulo.toLowerCase()
+    return p.tipo === 'avaliacao' || 
+      t.includes('experiência geral') || 
+      t.includes('experiencia geral') || 
+      t.includes('organização geral') || 
+      t.includes('organizacao geral')
+  })
+
+  if (pAprov && r.valores[pAprov.id]) {
+    const val = r.valores[pAprov.id]
+    const texto = pAprov.config?.opcoes?.find(o => o.id === (Array.isArray(val) ? val[0] : val))?.texto || (Array.isArray(val) ? val[0] : val)
+    return {
+      temAvaliacao: true,
+      texto: String(texto),
+    }
+  }
+
+  const respondidas = perguntasList.filter(p => r.valores[p.id] !== undefined && r.valores[p.id] !== null && r.valores[p.id] !== '').length
+  return {
+    temAvaliacao: false,
+    texto: `${respondidas} / ${perguntasList.length} respondidas`,
+  }
+}
 
 export const Relatorios: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -36,6 +126,21 @@ export const Relatorios: React.FC = () => {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([])
   const [relatorioData, setRelatorioData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+
+  // Controle de Acordeom Inline das Respostas (Opção 3)
+  const [respostasExpandidas, setRespostasExpandidas] = useState<Set<string>>(new Set())
+
+  const toggleRespostaExpandida = (respostaId: string) => {
+    setRespostasExpandidas(prev => {
+      const next = new Set(prev)
+      if (next.has(respostaId)) {
+        next.delete(respostaId)
+      } else {
+        next.add(respostaId)
+      }
+      return next
+    })
+  }
 
   // Estatísticas Amostrais reais (Inscritos no Objeto e Disparos efetuados)
   const [metricasAmostrais, setMetricasAmostrais] = useState<{
@@ -1155,68 +1260,179 @@ export const Relatorios: React.FC = () => {
               </span>
             </div>
             
-            <div className="overflow-x-auto max-h-[420px] overflow-y-auto pr-1">
+            <div className="w-full">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
-                    <th className="p-3 pl-4">Data / Hora</th>
-                    <th className="p-3">Atleta / Contato</th>
-                    {perguntas.map(p => (
-                      <th key={p.id} className="p-3 truncate max-w-[220px]" title={p.titulo}>{p.titulo}</th>
-                    ))}
-                    <th className="p-3 pr-4 text-right">Ação</th>
+                    <th className="p-3 pl-4 rounded-l-xl">Data / Hora</th>
+                    <th className="p-3">Participante / Contato</th>
+                    <th className="p-3">Perfil Rápido</th>
+                    <th className="p-3">Avaliação / Status</th>
+                    <th className="p-3 pr-4 text-right rounded-r-xl">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {resultadoFiltrado.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="p-3 pl-4 text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(r.created_at).toLocaleString('pt-BR')}
-                      </td>
-                      <td className="p-3 text-xs whitespace-nowrap">
-                        <span className="font-bold text-foreground block">{r.atleta_nome || 'Anônimo / Teste'}</span>
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
-                        </span>
-                      </td>
-                      {perguntas.map(p => {
-                        const val = r.valores[p.id]
-                        if (val === undefined || val === null || val === '') {
-                          return <td key={p.id} className="p-3 text-muted-foreground/60">-</td>
-                        }
-                        if (p.tipo === 'multipla') {
-                          const opcoes = p.config?.opcoes || []
-                          const selecionadas = Array.isArray(val) ? val : [val]
-                          const textos = selecionadas.map(opcaoId => opcoes.find(o => o.id === opcaoId)?.texto || opcaoId)
-                          return (
-                            <td key={p.id} className="p-3 text-foreground">
-                              <div className="flex flex-wrap gap-1">
-                                {textos.map((txt, idx) => (
-                                  <span key={idx} className="bg-primary/10 text-primary border border-primary/20 text-xs px-2 py-0.5 rounded-full font-bold">
-                                    {txt}
+                  {resultadoFiltrado.map((r: any) => {
+                    const expandida = respostasExpandidas.has(r.id)
+                    const badges = getResumoLinha(r, perguntas)
+                    const avaliacao = getAvaliacaoLinha(r, perguntas)
+
+                    return (
+                      <React.Fragment key={r.id}>
+                        {/* Linha Sintética Principal (Zero Scroll Lateral) */}
+                        <tr 
+                          onClick={() => toggleRespostaExpandida(r.id)} 
+                          className="hover:bg-primary/5 transition-colors cursor-pointer group"
+                        >
+                          <td className="p-3.5 pl-4 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                            {new Date(r.created_at).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            <span className="font-bold text-foreground block group-hover:text-primary transition-colors">
+                              {r.atleta_nome || 'Anônimo / Teste'}
+                            </span>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
+                            </span>
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {badges.length > 0 ? (
+                                badges.map((b, bIdx) => (
+                                  <span key={bIdx} className={`px-2 py-0.5 rounded-md text-xs font-bold border ${b.cor}`}>
+                                    {b.label}
                                   </span>
-                                ))}
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            {avaliacao.temAvaliacao ? (
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 inline-flex items-center gap-1">
+                                <span>{avaliacao.texto}</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground font-semibold">
+                                {avaliacao.texto}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 pr-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => toggleRespostaExpandida(r.id)}
+                                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer ${
+                                  expandida
+                                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                    : 'border-border bg-card hover:bg-muted text-foreground'
+                                }`}
+                              >
+                                <span>{expandida ? 'Recolher' : 'Ver Respostas'}</span>
+                                {expandida ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteIndividual(r.id, r.atleta_nome)}
+                                title="Excluir resposta (retorna participante para Pendente)"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Linha Expansível do Acordeom Inline (Adaptável a Qualquer Formulário) */}
+                        {expandida && (
+                          <tr className="bg-muted/15 border-b border-border">
+                            <td colSpan={5} className="p-5 sm:p-6 space-y-4">
+                              <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-5 animate-fade-in">
+                                
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    <span className="font-bold text-sm text-foreground">
+                                      Ficha Completa de Respostas · {r.atleta_nome || 'Participante'}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-mono text-muted-foreground">ID: {r.id}</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                  {perguntas.map(p => {
+                                    const val = r.valores[p.id]
+                                    const isVazio = val === undefined || val === null || val === ''
+                                    const isTextarea = p.tipo === 'textarea'
+
+                                    if (isTextarea) {
+                                      return (
+                                        <div key={p.id} className="md:col-span-2 lg:col-span-3 p-4 rounded-2xl bg-muted/30 border border-border space-y-1.5">
+                                          <span className="text-xs font-bold text-muted-foreground block">
+                                            💬 {p.titulo}
+                                          </span>
+                                          <p className="text-xs text-foreground italic bg-background p-3 rounded-xl border border-border leading-relaxed">
+                                            {isVazio ? <span className="text-muted-foreground/60 not-italic">Sem resposta enviada</span> : `"${val}"`}
+                                          </p>
+                                        </div>
+                                      )
+                                    }
+
+                                    if (p.tipo === 'multipla') {
+                                      const opcoes = p.config?.opcoes || []
+                                      const selecionadas = Array.isArray(val) ? val : isVazio ? [] : [val]
+                                      const textos = selecionadas.map(opcaoId => opcoes.find(o => o.id === opcaoId)?.texto || opcaoId)
+
+                                      return (
+                                        <div key={p.id} className="p-3.5 rounded-2xl bg-background border border-border space-y-1">
+                                          <span className="text-xs text-muted-foreground block line-clamp-1" title={p.titulo}>
+                                            {p.titulo}
+                                          </span>
+                                          <div className="flex flex-wrap gap-1 pt-0.5">
+                                            {textos.length > 0 ? (
+                                              textos.map((txt, idx) => (
+                                                <span key={idx} className="bg-primary/10 text-primary border border-primary/20 text-xs px-2 py-0.5 rounded-md font-bold">
+                                                  {txt}
+                                                </span>
+                                              ))
+                                            ) : (
+                                              <span className="text-xs text-muted-foreground/60">-</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )
+                                    }
+
+                                    return (
+                                      <div key={p.id} className="p-3.5 rounded-2xl bg-background border border-border space-y-1">
+                                        <span className="text-xs text-muted-foreground block line-clamp-1" title={p.titulo}>
+                                          {p.titulo}
+                                        </span>
+                                        <span className="text-xs font-bold text-foreground block pt-0.5">
+                                          {isVazio ? <span className="text-muted-foreground/60 font-normal">-</span> : String(val)}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+
+                                <div className="flex justify-end pt-2 border-t border-border">
+                                  <button
+                                    onClick={() => toggleRespostaExpandida(r.id)}
+                                    className="px-3.5 py-1.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-all cursor-pointer flex items-center gap-1"
+                                  >
+                                    <span>Recolher Ficha</span>
+                                    <ChevronUp className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+
                               </div>
                             </td>
-                          )
-                        }
-                        return (
-                          <td key={p.id} className="p-3 text-foreground truncate max-w-[250px]" title={val}>
-                            {val}
-                          </td>
-                        )
-                      })}
-                      <td className="p-3 pr-4 text-right">
-                        <button
-                          onClick={() => handleDeleteIndividual(r.id, r.atleta_nome)}
-                          title="Excluir resposta (retorna participante para Pendente)"
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
