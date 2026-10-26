@@ -863,13 +863,22 @@ export const Responder: React.FC = () => {
             pergunta_id: pergId,
             valor: respostasAtuais[pergId]
           }))
+
+          // Identificação de teste via URL ou dados do participante
+          const urlParams = new URLSearchParams(window.location.search)
+          const isUrlTeste = urlParams.get('teste') === 'true' || urlParams.get('modo') === 'teste'
+          const isPartTeste = (participanteConfirmado?.nome || '').toLowerCase().includes('teste') ||
+            Boolean(participanteConfirmado?.dados_extras?.teste)
+          const isTeste = isUrlTeste || isPartTeste
+
           await dbService.saveRespostaCompleta(
             pesqId, 
             deviceFp, 
             itens, 
             cpfConfirmado || undefined,
             participanteConfirmado?.id || null,
-            telefoneConfirmado || undefined
+            telefoneConfirmado || undefined,
+            isTeste
           )
         }
         setRespondeu(true)

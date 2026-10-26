@@ -25,7 +25,8 @@ import {
   TrendingUp, 
   MapPin,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FlaskConical
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']
@@ -138,6 +139,29 @@ export const Relatorios: React.FC = () => {
       } else {
         next.add(respostaId)
       }
+      return next
+    })
+  }
+
+  // Filtro de Respostas: Todas | Oficiais | Testes
+  const [filtroTipoResposta, setFiltroTipoResposta] = useState<'todos' | 'oficiais' | 'testes'>('todos')
+
+  // Seleção de Respostas em Lote (Checkboxes)
+  const [respostasSelecionadas, setRespostasSelecionadas] = useState<Set<string>>(new Set())
+
+  const toggleSelecionarTudo = () => {
+    if (respostasSelecionadas.size === resultadoFiltrado.length && resultadoFiltrado.length > 0) {
+      setRespostasSelecionadas(new Set())
+    } else {
+      setRespostasSelecionadas(new Set(resultadoFiltrado.map((r: any) => r.id)))
+    }
+  }
+
+  const toggleSelecionarResposta = (rId: string) => {
+    setRespostasSelecionadas(prev => {
+      const next = new Set(prev)
+      if (next.has(rId)) next.delete(rId)
+      else next.add(rId)
       return next
     })
   }
@@ -269,6 +293,13 @@ export const Relatorios: React.FC = () => {
     const respostas = relatorioData?.respostas || []
     let filtradas = respostas
 
+    // Filtro por tipo de resposta (oficiais x testes)
+    if (filtroTipoResposta === 'oficiais') {
+      filtradas = filtradas.filter((r: any) => !r.is_teste)
+    } else if (filtroTipoResposta === 'testes') {
+      filtradas = filtradas.filter((r: any) => !!r.is_teste)
+    }
+
     if (tagsFiltro.length > 0) {
       filtradas = filtradas.filter((resp: any) => {
         const valoresAmigaveis = new Set<string>()
@@ -300,7 +331,7 @@ export const Relatorios: React.FC = () => {
     }
 
     return filtradas
-  }, [relatorioData, tagsFiltro, logicaFiltro, perguntas])
+  }, [relatorioData, filtroTipoResposta, tagsFiltro, logicaFiltro, perguntas])
 
   // ── Inteligência de Dados & BI ─────────────────────────────────────────────
   const indicadoresBI = useMemo(() => {
@@ -390,19 +421,51 @@ export const Relatorios: React.FC = () => {
     }
   }
 
-  const handleLimparTodasRespostas = async () => {
+  const handleZerarApenasTestes = async () => {
     if (!id || !pesquisa) return
-    const total = relatorioData?.totalRespostas || 0
-    if (!confirm(`ATENÇÃO: Deseja realmente excluir TODAS as ${total} respostas da pesquisa "${pesquisa.titulo}"?\n\nEsta ação irá zerar as respostas e os envios de teste, deixando todos os participantes como pendentes novamente.`)) {
+    if (totalTestes === 0) {
+      alert('Não há nenhuma resposta de teste registrada nesta pesquisa.')
+      return
+    }
+
+    if (!confirm(`ATENÇÃO: Deseja realmente excluir ${totalTestes} resposta(s) marcada(s) como TESTE da pesquisa "${pesquisa.titulo}"?\n\nAs respostas oficiais dos atletas continuarão 100% preservadas e intactas.`)) {
       return
     }
 
     try {
-      await dbService.limparRespostas(id, true)
+      const apagadas = await dbService.limparRespostasTeste(id, true)
       await loadData(id)
-      alert('Todas as respostas foram apagadas com sucesso! A pesquisa está limpa para novos envios.')
+      alert(`${apagadas} resposta(s) de teste apagada(s) com sucesso! Respostas oficiais preservadas.`)
     } catch (err: any) {
-      alert('Erro ao limpar respostas: ' + err.message)
+      alert('Erro ao apagar testes: ' + err.message)
+    }
+  }
+
+  const handleExcluirSelecionadas = async () => {
+    if (!id || respostasSelecionadas.size === 0) return
+    const qtd = respostasSelecionadas.size
+    if (!confirm(`Deseja realmente excluir as ${qtd} resposta(s) selecionada(s)?\n\nOs participantes correspondentes voltarão para o status Pendente.`)) {
+      return
+    }
+
+    try {
+      await dbService.deleteRespostasLote(Array.from(respostasSelecionadas), true)
+      setRespostasSelecionadas(new Set())
+      await loadData(id)
+      alert(`${qtd} resposta(s) excluída(s) com sucesso!`)
+    } catch (err: any) {
+      alert('Erro ao excluir respostas selecionadas: ' + err.message)
+    }
+  }
+
+  const handleToggleRespostaTeste = async (respostaId: string, currentIsTeste: boolean) => {
+    try {
+      await dbService.toggleRespostaTeste(respostaId, !currentIsTeste)
+      if (id) {
+        await loadData(id)
+      }
+    } catch (err: any) {
+      alert('Erro ao alterar status da resposta: ' + err.message)
     }
   }
 
@@ -415,6 +478,8 @@ export const Relatorios: React.FC = () => {
   }
 
   const totalRespostas = relatorioData?.totalRespostas || 0
+  const totalOficiais = (relatorioData?.respostas || []).filter((r: any) => !r.is_teste).length
+  const totalTestes = (relatorioData?.respostas || []).filter((r: any) => !!r.is_teste).length
   const perguntasMultipla = perguntas.filter(p => p.tipo === 'multipla')
 
   return (
@@ -460,14 +525,25 @@ export const Relatorios: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
             {totalRespostas > 0 && (
               <>
-                <button
-                  onClick={handleLimparTodasRespostas}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive px-3.5 py-2.5 transition-all cursor-pointer shadow-sm"
-                  title="Excluir todas as respostas desta pesquisa para reiniciar testes"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Zerar Testes
-                </button>
+                {respostasSelecionadas.size > 0 && (
+                  <button
+                    onClick={handleExcluirSelecionadas}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25 text-xs font-bold px-3.5 py-2.5 transition-all cursor-pointer shadow-sm animate-fade-in"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir Selecionadas ({respostasSelecionadas.size})
+                  </button>
+                )}
+                {totalTestes > 0 && (
+                  <button
+                    onClick={handleZerarApenasTestes}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-xs font-bold text-amber-600 dark:text-amber-400 px-3.5 py-2.5 transition-all cursor-pointer shadow-sm"
+                    title={`Excluir apenas as ${totalTestes} respostas marcadas como teste`}
+                  >
+                    <FlaskConical className="h-4 w-4" />
+                    Zerar Testes ({totalTestes})
+                  </button>
+                )}
                 <button
                   onClick={handleExportExcel}
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-md active:scale-[0.98] transition-all cursor-pointer"
@@ -1247,25 +1323,63 @@ export const Relatorios: React.FC = () => {
           )}
 
           {/* ============================================================== */}
-          {/* TABELA DE RESPOSTAS INDIVIDUAIS                                */}
+          {/* TABELA DE RESPOSTAS INDIVIDUAIS COM ACORDEOM INLINE            */}
           {/* ============================================================== */}
           <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
               <div>
                 <h3 className="font-bold text-foreground text-lg">Respostas Individuais Registradas</h3>
-                <p className="text-xs text-muted-foreground">Listagem de respostas brutas com dados de auditoria</p>
+                <p className="text-xs text-muted-foreground">Listagem com auditoria, origem (oficial vs. teste) e seleção em lote</p>
               </div>
-              <span className="text-xs font-bold text-muted-foreground">
-                Exibindo {resultadoFiltrado.length} de {totalRespostas} registros
-              </span>
+
+              {/* Filtro Rápido de Origem: Todas / Oficiais / Testes */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoResposta('todos')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filtroTipoResposta === 'todos' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Todas ({totalRespostas})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoResposta('oficiais')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filtroTipoResposta === 'oficiais' ? 'bg-emerald-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  ✓ Oficiais ({totalOficiais})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroTipoResposta('testes')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filtroTipoResposta === 'testes' ? 'bg-amber-500 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🧪 Testes ({totalTestes})
+                </button>
+              </div>
             </div>
             
             <div className="w-full">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
-                    <th className="p-3 pl-4 rounded-l-xl">Data / Hora</th>
+                    <th className="p-3 pl-4 rounded-l-xl w-10">
+                      <input
+                        type="checkbox"
+                        checked={resultadoFiltrado.length > 0 && respostasSelecionadas.size === resultadoFiltrado.length}
+                        onChange={toggleSelecionarTudo}
+                        className="rounded border-border text-primary focus:ring-primary/20 cursor-pointer h-3.5 w-3.5"
+                        title="Selecionar / Deselecionar todas as visíveis"
+                      />
+                    </th>
+                    <th className="p-3">Data / Hora</th>
                     <th className="p-3">Participante / Contato</th>
+                    <th className="p-3">Origem</th>
                     <th className="p-3">Perfil Rápido</th>
                     <th className="p-3">Avaliação / Status</th>
                     <th className="p-3 pr-4 text-right rounded-r-xl">Ação</th>
@@ -1274,6 +1388,7 @@ export const Relatorios: React.FC = () => {
                 <tbody className="divide-y divide-border">
                   {resultadoFiltrado.map((r: any) => {
                     const expandida = respostasExpandidas.has(r.id)
+                    const selecionada = respostasSelecionadas.has(r.id)
                     const badges = getResumoLinha(r, perguntas)
                     const avaliacao = getAvaliacaoLinha(r, perguntas)
 
@@ -1282,9 +1397,17 @@ export const Relatorios: React.FC = () => {
                         {/* Linha Sintética Principal (Zero Scroll Lateral) */}
                         <tr 
                           onClick={() => toggleRespostaExpandida(r.id)} 
-                          className="hover:bg-primary/5 transition-colors cursor-pointer group"
+                          className={`hover:bg-primary/5 transition-colors cursor-pointer group ${selecionada ? 'bg-primary/5' : ''}`}
                         >
-                          <td className="p-3.5 pl-4 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                          <td className="p-3.5 pl-4" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selecionada}
+                              onChange={() => toggleSelecionarResposta(r.id)}
+                              className="rounded border-border text-primary focus:ring-primary/20 cursor-pointer h-3.5 w-3.5"
+                            />
+                          </td>
+                          <td className="p-3.5 text-xs text-muted-foreground whitespace-nowrap font-mono">
                             {new Date(r.created_at).toLocaleString('pt-BR')}
                           </td>
                           <td className="p-3.5 whitespace-nowrap">
@@ -1294,6 +1417,17 @@ export const Relatorios: React.FC = () => {
                             <span className="text-xs font-mono text-muted-foreground">
                               {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
                             </span>
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            {r.is_teste ? (
+                              <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30 inline-flex items-center gap-1">
+                                🧪 Teste
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 inline-flex items-center gap-1">
+                                ✓ Oficial
+                              </span>
+                            )}
                           </td>
                           <td className="p-3.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1346,17 +1480,41 @@ export const Relatorios: React.FC = () => {
                         {/* Linha Expansível do Acordeom Inline (Adaptável a Qualquer Formulário) */}
                         {expandida && (
                           <tr className="bg-muted/15 border-b border-border">
-                            <td colSpan={5} className="p-5 sm:p-6 space-y-4">
+                            <td colSpan={7} className="p-5 sm:p-6 space-y-4">
                               <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-5 animate-fade-in">
                                 
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`w-2.5 h-2.5 rounded-full ${r.is_teste ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
                                     <span className="font-bold text-sm text-foreground">
-                                      Ficha Completa de Respostas · {r.atleta_nome || 'Participante'}
+                                      Ficha Completa · {r.atleta_nome || 'Participante'}
                                     </span>
+                                    {r.is_teste ? (
+                                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                                        🧪 Resposta de Teste
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                        ✓ Resposta Oficial
+                                      </span>
+                                    )}
                                   </div>
-                                  <span className="text-xs font-mono text-muted-foreground">ID: {r.id}</span>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleRespostaTeste(r.id, r.is_teste)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                                        r.is_teste
+                                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/30'
+                                          : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border-amber-500/30'
+                                      }`}
+                                      title="Alternar se esta resposta é oficial ou de teste"
+                                    >
+                                      {r.is_teste ? '✓ Mudar para Oficial' : '🧪 Marcar como Teste'}
+                                    </button>
+                                    <span className="text-xs font-mono text-muted-foreground hidden sm:inline">ID: {r.id.slice(0, 8)}...</span>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">

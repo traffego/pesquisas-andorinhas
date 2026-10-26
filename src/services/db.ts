@@ -153,6 +153,7 @@ export interface Resposta {
   id: string
   pesquisa_id: string
   fingerprint: string
+  is_teste?: boolean
   created_at?: string
 }
 
@@ -365,7 +366,8 @@ export const dbService = {
     itens: { pergunta_id: string; valor: any }[], 
     cpf?: string,
     participanteId?: string | null,
-    telefone?: string | null
+    telefone?: string | null,
+    isTeste: boolean = false
   ): Promise<void> {
     const cleanCpf = cpf ? cpf.replace(/\D/g, '') : null
     const cleanTel = telefone ? telefone.replace(/\D/g, '') : null
@@ -382,6 +384,7 @@ export const dbService = {
     const { data: respData, error: respError } = await supabase.from('resposta').insert({
       pesquisa_id: pesquisaId,
       fingerprint,
+      is_teste: !!isTeste,
       ...(cleanCpf ? { cpf: cleanCpf } : {}),
       ...(participanteId ? { participante_id: participanteId } : {}),
       ...(cleanTel ? { telefone: cleanTel } : {})
@@ -748,12 +751,13 @@ export const dbService = {
       telefone?: string | null
       participante_id?: string | null
       atleta_nome?: string | null
+      is_teste: boolean
       valores: Record<string, any>
     }[]
   }> {
     const { data: respostas, error: respError } = await supabase
       .from('resposta')
-      .select('id, created_at, cpf, telefone, participante_id, participante:participante_id(nome)')
+      .select('id, created_at, cpf, telefone, participante_id, is_teste, participante:participante_id(nome)')
       .eq('pesquisa_id', pesquisaId)
       .order('created_at', { ascending: false })
 
@@ -781,11 +785,77 @@ export const dbService = {
         telefone: r.telefone,
         participante_id: r.participante_id,
         atleta_nome: pNome,
+        is_teste: !!r.is_teste,
         valores
       }
     })
 
     return { totalRespostas: respostas.length, respostas: formatted }
+  },
+
+  async toggleRespostaTeste(respostaId: string, isTeste: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('resposta')
+      .update({ is_teste: isTeste })
+      .eq('id', respostaId)
+    if (error) throw error
+  },
+
+  async limparRespostasTeste(pesquisaId: string, resetarDisparo: boolean = true): Promise<number> {
+    const { data: testes, error: fetchErr } = await supabase
+      .from('resposta')
+      .select('id, participante_id')
+      .eq('pesquisa_id', pesquisaId)
+      .eq('is_teste', true)
+
+    if (fetchErr) throw fetchErr
+    if (!testes || testes.length === 0) return 0
+
+    const ids = testes.map(t => t.id)
+    const partIds = testes.map(t => t.participante_id).filter(Boolean) as string[]
+
+    if (resetarDisparo && partIds.length > 0) {
+      await supabase
+        .from('disparo_whatsapp_log')
+        .delete()
+        .eq('pesquisa_id', pesquisaId)
+        .in('participante_id', partIds)
+    }
+
+    const { error: delError } = await supabase
+      .from('resposta')
+      .delete()
+      .in('id', ids)
+
+    if (delError) throw delError
+    return ids.length
+  },
+
+  async deleteRespostasLote(respostaIds: string[], resetarDisparos: boolean = true): Promise<void> {
+    if (!respostaIds || respostaIds.length === 0) return
+
+    const { data: respList } = await supabase
+      .from('resposta')
+      .select('id, participante_id, pesquisa_id')
+      .in('id', respostaIds)
+
+    const partIds = (respList || []).map(r => r.participante_id).filter(Boolean) as string[]
+    const pesquisaId = respList?.[0]?.pesquisa_id
+
+    if (resetarDisparos && partIds.length > 0 && pesquisaId) {
+      await supabase
+        .from('disparo_whatsapp_log')
+        .delete()
+        .eq('pesquisa_id', pesquisaId)
+        .in('participante_id', partIds)
+    }
+
+    const { error } = await supabase
+      .from('resposta')
+      .delete()
+      .in('id', respostaIds)
+
+    if (error) throw error
   },
 
   async getMetricasAmostrais(pesquisaId: string, objetoId?: string | null): Promise<{
