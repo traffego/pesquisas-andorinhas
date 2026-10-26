@@ -499,17 +499,21 @@ export const Responder: React.FC = () => {
       <div className="space-y-1.5 w-full">
         {perg.tipo === 'texto_curto' && (
           <input
+            autoFocus
+            ref={(el) => { if (el) el.focus() }}
             type="text"
             value={val || ''}
             onChange={(e) => setVal(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Escreva sua resposta..."
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base shadow-sm cursor-text relative z-20"
           />
         )}
 
         {perg.tipo === 'textarea' && (
           <textarea
+            autoFocus
+            ref={(el) => { if (el) el.focus() }}
             value={val || ''}
             onChange={(e) => setVal(e.target.value)}
             onKeyDown={(e) => {
@@ -524,7 +528,7 @@ export const Responder: React.FC = () => {
             }}
             placeholder="Escreva sua resposta com detalhes..."
             rows={4}
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base resize-none leading-relaxed shadow-sm"
+            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-foreground placeholder-zinc-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-base resize-none leading-relaxed shadow-sm cursor-text relative z-20"
           />
         )}
 
@@ -1315,7 +1319,7 @@ export const Responder: React.FC = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 space-y-6 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 -translate-y-10 translate-x-10 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl"></div>
+          <div className="pointer-events-none absolute top-0 right-0 -translate-y-10 translate-x-10 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl"></div>
           <div className="bg-emerald-500/10 p-4 rounded-full text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-fit mx-auto">
             <CheckCircle2 className="h-12 w-12" />
           </div>
@@ -1374,7 +1378,7 @@ export const Responder: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground relative overflow-hidden font-sans">
       {/* Background radial overlays */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[350px] w-[350px] rounded-full bg-primary/5 blur-[80px]"></div>
+      <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-[350px] w-[350px] rounded-full bg-primary/5 blur-[80px]"></div>
 
       {/* Progress Bar */}
       <div className="w-full bg-muted h-1.5 sticky top-0 z-50">
@@ -1385,7 +1389,7 @@ export const Responder: React.FC = () => {
       </div>
 
       {/* Header */}
-      <header className="py-6 px-6 border-b border-border/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 bg-card/10 backdrop-blur-sm">
+      <header className="py-6 px-6 border-b border-border/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 bg-card/10 backdrop-blur-sm relative z-10">
         <div className="flex items-start md:items-center gap-4">
           <img src={logoImg} alt="Andorinha Logo" className="h-14 w-auto object-contain dark:bg-white dark:rounded-lg dark:p-1.5 shrink-0" />
           <div className="h-8 w-[1px] bg-border hidden md:block"></div>
@@ -1411,7 +1415,7 @@ export const Responder: React.FC = () => {
       </header>
 
       {/* Pergunta Container */}
-      <main className="flex-1 flex items-center justify-center p-6 max-w-md mx-auto w-full">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-6 max-w-md mx-auto w-full">
         {(perguntaAtual || isBlock) && (
           <form
             onSubmit={(e) => {
