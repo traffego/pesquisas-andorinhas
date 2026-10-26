@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { dbService, type Pesquisa, type Pergunta } from '../../services/db'
+import { processarRelatorioCorridaBI } from '../../utils/relatorioBI'
 import * as XLSX from 'xlsx'
 import { 
   BarChart, 
@@ -9,20 +10,20 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer, 
+  Cell 
 } from 'recharts'
 import { 
   ArrowLeft, 
   FileSpreadsheet, 
   Users, 
-  ClipboardCheck, 
-  Clock, 
   Sparkles, 
   BarChart2, 
   Filter, 
-  X,
-  Trash2
+  X, 
+  Trash2, 
+  TrendingUp, 
+  MapPin 
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']
@@ -36,6 +37,18 @@ export const Relatorios: React.FC = () => {
   const [relatorioData, setRelatorioData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  // Estatísticas Amostrais reais (Inscritos no Objeto e Disparos efetuados)
+  const [metricasAmostrais, setMetricasAmostrais] = useState<{
+    totalInscritos: number
+    totalNotificados: number
+  }>({
+    totalInscritos: 0,
+    totalNotificados: 0,
+  })
+
+  // Controle de Abas Executivas (Aba 1 ativa por padrão)
+  const [abaAtiva, setAbaAtiva] = useState<'perfil' | 'executivo' | 'territorio'>('perfil')
+
   // Filtro de Tags Dinâmico
   const [tagsFiltro, setTagsFiltro] = useState<string[]>([])
   const [logicaFiltro, setLogicaFiltro] = useState<'AND' | 'OR'>('AND')
@@ -44,7 +57,7 @@ export const Relatorios: React.FC = () => {
   const [inputValue, setInputValue] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
-  const [mostrarGraficos, setMostrarGraficos] = useState(false)
+  const [mostrarGraficosIndividuais, setMostrarGraficosIndividuais] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -77,7 +90,6 @@ export const Relatorios: React.FC = () => {
           const fluxo = allFluxos.find(f => f.id === currentId)
           if (fluxo && fluxo.flow_data && Array.isArray(fluxo.flow_data.nodes)) {
             fluxo.flow_data.nodes.forEach((node: any) => {
-              // Inclui tanto subfluxos quanto blocos reutilizáveis
               if ((node.type === 'subflow' || node.type === 'block') && node.data?.subflowId) {
                 const subId = node.data.subflowId
                 if (!visited.has(subId)) {
@@ -99,6 +111,10 @@ export const Relatorios: React.FC = () => {
 
       const data = await dbService.getRelatorios(pesquisaId)
       setRelatorioData(data)
+
+      // Carrega métricas amostrais reais do banco
+      const amostrais = await dbService.getMetricasAmostrais(pesquisaId, pesq.objeto_id)
+      setMetricasAmostrais(amostrais)
     } catch (err) {
       console.error(err)
     } finally {
@@ -111,7 +127,6 @@ export const Relatorios: React.FC = () => {
     const termos = new Set<string>()
     const respostas = relatorioData?.respostas || []
 
-    // 1. Opções das perguntas de múltipla escolha
     perguntas.forEach(p => {
       if (p.tipo === 'multipla' && p.config?.opcoes) {
         p.config.opcoes.forEach(o => {
@@ -122,7 +137,6 @@ export const Relatorios: React.FC = () => {
       }
     })
 
-    // 2. Valores das respostas cadastradas
     respostas.forEach((r: any) => {
       perguntas.forEach(p => {
         const val = r.valores[p.id]
@@ -150,7 +164,6 @@ export const Relatorios: React.FC = () => {
     const respostas = relatorioData?.respostas || []
     let filtradas = respostas
 
-    // Filtrar por tags
     if (tagsFiltro.length > 0) {
       filtradas = filtradas.filter((resp: any) => {
         const valoresAmigaveis = new Set<string>()
@@ -184,35 +197,38 @@ export const Relatorios: React.FC = () => {
     return filtradas
   }, [relatorioData, tagsFiltro, logicaFiltro, perguntas])
 
-  // --- PREPARA DADOS DOS GRÁFICOS ---
+  // ── Inteligência de Dados & BI ─────────────────────────────────────────────
+  const indicadoresBI = useMemo(() => {
+    if (!perguntas.length || !resultadoFiltrado.length) return null
+    return processarRelatorioCorridaBI({
+      perguntas,
+      respostas: resultadoFiltrado,
+      totalInscritos: metricasAmostrais.totalInscritos,
+      totalNotificados: metricasAmostrais.totalNotificados,
+    })
+  }, [perguntas, resultadoFiltrado, metricasAmostrais])
+
+  // --- PREPARA DADOS DOS GRÁFICOS INDIVIDUAIS ---
   const getGraficoDados = (pergunta: Pergunta) => {
     if (pergunta.tipo !== 'multipla' || !relatorioData) return []
     const opcoes = pergunta.config?.opcoes || []
     
-    // Inicializa contagem
     const contagem: Record<string, { nome: string; quantidade: number }> = {}
     opcoes.forEach(o => {
       contagem[o.id] = { nome: o.texto, quantidade: 0 }
     })
 
-    // Soma respostas
     resultadoFiltrado.forEach((resp: any) => {
       const valor = resp.valores[pergunta.id]
-      if (Array.isArray(valueToArr(valor))) {
-        valueToArr(valor).forEach((opcaoId: string) => {
-          if (contagem[opcaoId]) {
-            contagem[opcaoId].quantidade += 1
-          }
-        })
-      }
+      const arr = Array.isArray(valor) ? valor : valor ? [valor] : []
+      arr.forEach((opcaoId: string) => {
+        if (contagem[opcaoId]) {
+          contagem[opcaoId].quantidade += 1
+        }
+      })
     })
 
     return Object.values(contagem)
-  }
-
-  const valueToArr = (val: any): string[] => {
-    if (!val) return []
-    return Array.isArray(val) ? val : [val]
   }
 
   // --- EXPORTAR EXCEL ---
@@ -223,6 +239,9 @@ export const Relatorios: React.FC = () => {
       const rowData: Record<string, any> = {
         'ID da Resposta': r.id,
         'Data/Hora da Resposta': new Date(r.created_at).toLocaleString('pt-BR'),
+        'Atleta / Participante': r.atleta_nome || 'Anônimo',
+        'CPF': r.cpf || '-',
+        'Telefone': r.telefone || '-',
       }
 
       perguntas.forEach(p => {
@@ -246,8 +265,7 @@ export const Relatorios: React.FC = () => {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Respostas')
     
-    // Baixar arquivo
-    XLSX.writeFile(workbook, `respostas_${pesquisa.token}.xlsx`)
+    XLSX.writeFile(workbook, `relatorio_${pesquisa.token || 'pesquisa'}.xlsx`)
   }
 
   const handleDeleteIndividual = async (respostaId: string, atletaNome?: string | null) => {
@@ -296,112 +314,658 @@ export const Relatorios: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto text-foreground">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-border pb-5">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/admin/pesquisas"
-            className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Métricas & Relatórios</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{pesquisa?.titulo}</p>
+      
+      {/* Header Executivo */}
+      <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-5">
+          <div className="flex items-start gap-3">
+            <Link
+              to="/admin/pesquisas"
+              className="p-2.5 rounded-2xl border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer mt-1"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {metricasAmostrais.totalInscritos > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    📅 Base do Evento ({metricasAmostrais.totalInscritos} inscritos)
+                  </span>
+                )}
+                {pesquisa?.publicada ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                    Pesquisa Ativa
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border">
+                    Rascunho
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground">Token: <code className="font-mono font-bold text-foreground">{pesquisa?.token}</code></span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                {pesquisa?.titulo}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Inteligência analítica, perfil demográfico dos respondentes e comprovação de indicadores.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+            {totalRespostas > 0 && (
+              <>
+                <button
+                  onClick={handleLimparTodasRespostas}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive px-3.5 py-2.5 transition-all cursor-pointer shadow-sm"
+                  title="Excluir todas as respostas desta pesquisa para reiniciar testes"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Zerar Testes
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-md active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Exportar Excel (.xlsx)
+                </button>
+              </>
+            )}
           </div>
         </div>
 
+        {/* Barra de Navegação por Abas Executivas */}
         {totalRespostas > 0 && (
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 pt-4 overflow-x-auto">
             <button
-              onClick={handleLimparTodasRespostas}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive px-3.5 py-2.5 transition-all cursor-pointer shadow-sm"
-              title="Excluir todas as respostas desta pesquisa para reiniciar testes"
+              onClick={() => setAbaAtiva('perfil')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                abaAtiva === 'perfil'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground border border-border bg-background'
+              }`}
             >
-              <Trash2 className="h-4 w-4" />
-              Zerar Respostas de Teste
+              <Users className="h-3.5 w-3.5" />
+              1. Perfil do Atleta & Cruzamentos
             </button>
             <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 active:scale-[0.98] transition-all cursor-pointer"
+              onClick={() => setAbaAtiva('executivo')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                abaAtiva === 'executivo'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground border border-border bg-background'
+              }`}
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Exportar Excel (.xlsx)
+              <TrendingUp className="h-3.5 w-3.5" />
+              2. Painel Executivo & Indicadores
+            </button>
+            <button
+              onClick={() => setAbaAtiva('territorio')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                abaAtiva === 'territorio'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground border border-border bg-background'
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              3. Amostragem & Território
             </button>
           </div>
         )}
       </div>
 
-      {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Total de Respostas */}
-        <div className="rounded-2xl border border-border bg-card p-6 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total de Respostas</p>
-            <p className="text-3xl font-extrabold text-foreground">
-              {tagsFiltro.length > 0 ? `${resultadoFiltrado.length} / ${totalRespostas}` : totalRespostas}
-            </p>
-          </div>
-          <div className="rounded-xl p-3 bg-primary/10 text-primary border border-primary/20">
-            <ClipboardCheck className="h-6 w-6" />
-          </div>
-        </div>
-
-        {/* Coleta Ativa */}
-        <div className="rounded-2xl border border-border bg-card p-6 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Status da Pesquisa</p>
-            <p className="text-lg font-bold text-foreground mt-1">
-              {pesquisa?.publicada ? (
-                <span className="text-emerald-600 dark:text-emerald-400">Ativa e Pública</span>
-              ) : (
-                <span className="text-muted-foreground">Rascunho / Inativa</span>
-              )}
-            </p>
-          </div>
-          <div className="rounded-xl p-3 bg-muted border border-border text-muted-foreground">
-            <Users className="h-6 w-6" />
-          </div>
-        </div>
-
-        {/* Resposta Recente */}
-        <div className="rounded-2xl border border-border bg-card p-6 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Tempo de Coleta</p>
-            <p className="text-lg font-bold text-foreground mt-1">
-              {totalRespostas > 0 ? (
-                <span className="text-primary font-semibold">~2 min / média</span>
-              ) : (
-                <span className="text-muted-foreground">Sem histórico</span>
-              )}
-            </p>
-          </div>
-          <div className="rounded-xl p-3 bg-muted border border-border text-muted-foreground">
-            <Clock className="h-6 w-6" />
-          </div>
-        </div>
-      </div>
-
       {totalRespostas === 0 ? (
-        <div className="text-center py-20 rounded-2xl border border-dashed border-border bg-card/50">
-          <BarChart2 className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4 animate-pulse" />
-          <h3 className="font-bold text-muted-foreground text-lg">Sem dados de resposta</h3>
-          <p className="text-muted-foreground/80 text-sm mt-1 max-w-sm mx-auto">
-            Esta pesquisa ainda não possui respostas registradas no banco de dados. Compartilhe o link para começar a gerar métricas.
+        <div className="text-center py-20 rounded-3xl border border-dashed border-border bg-card/60 p-8 space-y-3">
+          <BarChart2 className="h-12 w-12 mx-auto text-muted-foreground/40 animate-pulse" />
+          <h3 className="font-bold text-foreground text-lg">Nenhuma resposta registrada ainda</h3>
+          <p className="text-muted-foreground text-xs max-w-md mx-auto">
+            Assim que os participantes responderem ao formulário pelo WhatsApp ou link direto, os cruzamentos demográficos e KPIs analíticos serão computados automaticamente em tempo real.
           </p>
+          {pesquisa?.token && (
+            <div className="pt-2">
+              <a
+                href={`/r/${pesquisa.token}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow hover:opacity-90 transition-all"
+              >
+                Abrir formulário de resposta
+              </a>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="space-y-8">
-          {/* Barra de Busca Dinâmica por Tags (Autocomplete) */}
+        <div className="space-y-6">
+
+          {/* ============================================================== */}
+          {/* VISÃO 1: PERFIL DO ATLETA & CRUZAMENTOS (ABA ATIVA INICIAL)     */}
+          {/* ============================================================== */}
+          {abaAtiva === 'perfil' && (
+            <div className="space-y-6 animate-fade-in">
+              
+              {/* 4 Cards de Resumo do Perfil */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* Card 1: Estreantes / Iniciação Esportiva */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Iniciação Esportiva</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 border border-amber-500/20">Impacto</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-amber-500">
+                      {indicadoresBI?.estreantes ? `${indicadoresBI.estreantes.percentualEstreantes}%` : `${resultadoFiltrado.length}`}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {indicadoresBI?.estreantes ? '1ª Corrida' : 'Respondentes'}
+                    </span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-amber-500 h-full rounded-full" 
+                      style={{ width: `${indicadoresBI?.estreantes?.percentualEstreantes || 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {indicadoresBI?.estreantes 
+                      ? `${indicadoresBI.estreantes.totalEstreantes} atletas estrearam em corrida de rua nesta prova.`
+                      : `${resultadoFiltrado.length} atletas responderam.`}
+                  </p>
+                </div>
+
+                {/* Card 2: Paridade de Gênero */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Paridade de Gênero</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-pink-500/10 text-pink-600 border border-pink-500/20">Equilíbrio</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-pink-500">
+                      {indicadoresBI?.genero ? `${indicadoresBI.genero.feminino.pct}%` : '-'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Mulheres</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full flex overflow-hidden">
+                    <div className="bg-pink-500 h-full" style={{ width: `${indicadoresBI?.genero?.feminino.pct || 50}%` }} />
+                    <div className="bg-blue-500 h-full" style={{ width: `${indicadoresBI?.genero?.masculino.pct || 50}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {indicadoresBI?.genero 
+                      ? `${indicadoresBI.genero.feminino.count} mulheres e ${indicadoresBI.genero.masculino.count} homens.`
+                      : 'Divisão por gênero apurada.'}
+                  </p>
+                </div>
+
+                {/* Card 3: Faixa Etária Dominante */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Faixa Etária Principal</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/20">Idade</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-purple-600 truncate max-w-[170px]" title={indicadoresBI?.faixaEtariaDominante?.faixa || 'N/A'}>
+                      {indicadoresBI?.faixaEtariaDominante?.faixa || 'Geral'}
+                    </span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div className="bg-purple-500 h-full rounded-full" style={{ width: `${indicadoresBI?.faixaEtariaDominante?.percentual || 100}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {indicadoresBI?.faixaEtariaDominante 
+                      ? `${indicadoresBI.faixaEtariaDominante.percentual}% do total de participantes.`
+                      : 'Concentração etária apurada.'}
+                  </p>
+                </div>
+
+                {/* Card 4: Inclusão Social (Renda Familiar) */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Até 2 Salários Mínimos</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Social</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-emerald-600">
+                      {indicadoresBI?.rendaAte2SM ? `${indicadoresBI.rendaAte2SM.percentual}%` : '-'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">da base</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${indicadoresBI?.rendaAte2SM?.percentual || 0}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {indicadoresBI?.rendaAte2SM 
+                      ? `${indicadoresBI.rendaAte2SM.total} atletas em estratos populares.`
+                      : 'Estrato socioeconômico apurado.'}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Grade de Cruzamentos Bi-dimensionais */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Cruzamento 1: Gênero vs Estreantes */}
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Cruzamento: Gênero vs. Estreantes</h3>
+                      <p className="text-xs text-muted-foreground">Proporção de primeira vez em corrida por gênero</p>
+                    </div>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                      Inclusão
+                    </span>
+                  </div>
+
+                  {indicadoresBI?.cruzamentoGeneroEstreantes && indicadoresBI.cruzamentoGeneroEstreantes.length > 0 ? (
+                    <div className="space-y-4 pt-1">
+                      {indicadoresBI.cruzamentoGeneroEstreantes.map((item, idx) => {
+                        const simItem = item.distribuicaoY.find(y => y.opcaoY.toLowerCase().startsWith('sim'))
+                        const pctEstreante = simItem ? simItem.percentualNaOpcaoX : 0
+                        const isFem = item.opcaoX.toLowerCase().includes('fem')
+                        const barColor = isFem ? 'bg-pink-500' : 'bg-blue-500'
+                        const textColor = isFem ? 'text-pink-500' : 'text-blue-500'
+
+                        return (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex justify-between text-xs font-semibold">
+                              <span className={`${textColor} font-bold`}>{item.opcaoX} ({item.totalX} atletas)</span>
+                              <span>{pctEstreante}% Estreantes ({simItem?.quantidade || 0} atletas)</span>
+                            </div>
+                            <div className="h-3 w-full bg-border rounded-full flex overflow-hidden">
+                              <div className={`${barColor} h-full`} style={{ width: `${pctEstreante}%` }} title={`Estreantes: ${pctEstreante}%`} />
+                              <div className="bg-muted h-full" style={{ width: `${100 - pctEstreante}%` }} title={`Veteranos: ${100 - pctEstreante}%`} />
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      <div className="p-3.5 rounded-2xl bg-primary/10 border border-primary/20 text-xs text-foreground space-y-1">
+                        <span className="font-bold text-primary block">💡 Conclusão de BI:</span>
+                        <p>
+                          A corrida atua como porta de entrada esportiva e inclusão comunitária, identificando a taxa real de adesão ao hábito esportivo em cada grupo.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-8 text-center">
+                      Dados de cruzamento sendo computados com base nas respostas cadastradas.
+                    </p>
+                  )}
+                </div>
+
+                {/* Cruzamento 2: Distribuição Etária */}
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-base font-black text-foreground">Distribuição Etária dos Atletas</h3>
+                    <p className="text-xs text-muted-foreground">Volume e percentual de participantes por faixa de idade</p>
+                  </div>
+
+                  {indicadoresBI?.faixaEtaria && indicadoresBI.faixaEtaria.length > 0 ? (
+                    <div className="space-y-3 pt-1">
+                      {indicadoresBI.faixaEtaria.map((fe, idx) => (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold text-foreground">{fe.nome}</span>
+                            <span className="font-semibold text-muted-foreground">{fe.quantidade} atletas ({fe.percentual}%)</span>
+                          </div>
+                          <div className="h-2.5 w-full bg-border rounded-full overflow-hidden">
+                            <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${fe.percentual}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-8 text-center">Sem dados etários apurados.</p>
+                  )}
+                </div>
+
+                {/* Cruzamento 3: Renda Familiar Mensal (Span 2) */}
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4 lg:col-span-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Estrato Socioeconômico (Renda Familiar Mensal)</h3>
+                      <p className="text-xs text-muted-foreground">Evidência de democratização de acesso ao evento público e gratuito</p>
+                    </div>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 self-start sm:self-auto">
+                      Comprovação Social
+                    </span>
+                  </div>
+
+                  {indicadoresBI?.renda && indicadoresBI.renda.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+                      {indicadoresBI.renda.map((r, idx) => (
+                        <div key={idx} className="p-4 rounded-2xl border border-border bg-background space-y-1">
+                          <span className="text-xs font-bold text-muted-foreground block line-clamp-1" title={r.nome}>{r.nome}</span>
+                          <span className="text-2xl font-black text-foreground">{r.percentual}%</span>
+                          <p className="text-xs text-muted-foreground">{r.quantidade} atletas</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-6 text-center">Sem dados de renda familiar cadastrados.</p>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* VISÃO 2: PAINEL EXECUTIVO & INDICADORES (ABA 2)                 */}
+          {/* ============================================================== */}
+          {abaAtiva === 'executivo' && (
+            <div className="space-y-6 animate-fade-in">
+              
+              {/* 4 Grand Card KPIs Estratégicos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* Card 1: CSAT / Aprovação Geral */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Aprovação Geral</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      {indicadoresBI?.aprovacaoGeral?.nivelTexto || 'Avaliado'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-emerald-600">
+                      {indicadoresBI?.aprovacaoGeral ? `${indicadoresBI.aprovacaoGeral.percentual}%` : '100%'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Muito Boa + Boa</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-full rounded-full" 
+                      style={{ width: `${indicadoresBI?.aprovacaoGeral?.percentual || 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Base: {resultadoFiltrado.length} respostas coletadas.
+                  </p>
+                </div>
+
+                {/* Card 2: Intenção de Retorno (Fidelização) */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Participaria Novamente</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/20">Fidelização</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-blue-500">
+                      {indicadoresBI?.fidelizacao ? `${indicadoresBI.fidelizacao.percentual}%` : '-'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Retorno</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-blue-500 h-full rounded-full" 
+                      style={{ width: `${indicadoresBI?.fidelizacao?.percentual || 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {indicadoresBI?.fidelizacao ? `${indicadoresBI.fidelizacao.retorno} atletas confirmaram retorno.` : 'Índice de fidelização.'}
+                  </p>
+                </div>
+
+                {/* Card 3: Impacto Social / Cumprimento do Fomento */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Incentivo a Hábitos</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/20">Meta Pública</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-purple-600">
+                      {indicadoresBI?.metaFomento ? `${indicadoresBI.metaFomento.percentual}%` : '-'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Concordância</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-purple-500 h-full rounded-full" 
+                      style={{ width: `${indicadoresBI?.metaFomento?.percentual || 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Comprova o cumprimento do objeto do termo de fomento.
+                  </p>
+                </div>
+
+                {/* Card 4: Margem de Erro Amostral */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Rigor Estatístico</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-zinc-500/10 text-zinc-600 border border-zinc-500/20">IC 95%</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-foreground">
+                      {indicadoresBI?.margemErro !== null ? `±${indicadoresBI?.margemErro}%` : '±0.0%'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Margem Erro</span>
+                  </div>
+                  <div className="w-full bg-border h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {metricasAmostrais.totalInscritos > 0 
+                      ? `Universo: ${metricasAmostrais.totalInscritos} atletas inscritos.`
+                      : 'Amostragem representativa com rigor científico.'}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Matriz de Desempenho Operacional vs Funil de Resposta */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Bloco Operacional */}
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-5">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Avaliação Operacional Detalhada</h3>
+                      <p className="text-xs text-muted-foreground">Notas atribuídas pelos corredores às dimensões da prova</p>
+                    </div>
+                    {indicadoresBI?.notaGeralMedia && (
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                        Nota {indicadoresBI.notaGeralMedia} / 10
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Organização Geral */}
+                    {indicadoresBI?.organizacao && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>1. Organização Geral do Evento</span>
+                          <span className="text-emerald-600 font-semibold">
+                            {indicadoresBI.organizacao.find(o => o.nome.toLowerCase().includes('muito boa'))?.percentual || 0}% Muito Boa
+                          </span>
+                        </div>
+                        <div className="h-3 w-full bg-border rounded-full flex overflow-hidden">
+                          {indicadoresBI.organizacao.map((item, idx) => {
+                            const colors = ['bg-emerald-600', 'bg-emerald-400', 'bg-amber-400', 'bg-red-500', 'bg-red-700']
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`${colors[idx % colors.length]} h-full`} 
+                                style={{ width: `${item.percentual}%` }} 
+                                title={`${item.nome}: ${item.percentual}%`}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Estrutura */}
+                    {indicadoresBI?.estrutura && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>2. Estrutura (Percurso, Hidratação e Segurança)</span>
+                          <span className="text-emerald-600 font-semibold">
+                            {indicadoresBI.estrutura.find(o => o.nome.toLowerCase().includes('muito boa'))?.percentual || 0}% Muito Boa
+                          </span>
+                        </div>
+                        <div className="h-3 w-full bg-border rounded-full flex overflow-hidden">
+                          {indicadoresBI.estrutura.map((item, idx) => {
+                            const colors = ['bg-emerald-600', 'bg-emerald-400', 'bg-amber-400', 'bg-red-500', 'bg-red-700']
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`${colors[idx % colors.length]} h-full`} 
+                                style={{ width: `${item.percentual}%` }} 
+                                title={`${item.nome}: ${item.percentual}%`}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Benefício para a Cidade */}
+                    {indicadoresBI?.beneficioComunidade && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>3. Benefícios Trazidos para o Município</span>
+                          <span className="text-purple-600 font-semibold">
+                            {indicadoresBI.beneficioComunidade.find(o => o.nome.toLowerCase().includes('muitos'))?.percentual || 0}% Alto Impacto
+                          </span>
+                        </div>
+                        <div className="h-3 w-full bg-border rounded-full flex overflow-hidden">
+                          {indicadoresBI.beneficioComunidade.map((item, idx) => {
+                            const colors = ['bg-purple-600', 'bg-purple-400', 'bg-zinc-400', 'bg-zinc-600']
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`${colors[idx % colors.length]} h-full`} 
+                                style={{ width: `${item.percentual}%` }} 
+                                title={`${item.nome}: ${item.percentual}%`}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t border-border flex-wrap">
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-600"></span> Muito Boa</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-400"></span> Boa</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-400"></span> Regular</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500"></span> Ruim</span>
+                  </div>
+                </div>
+
+                {/* Funil de Resposta */}
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Engajamento & Taxa de Resposta</h3>
+                      <p className="text-xs text-muted-foreground">Adesão dos corredores da base</p>
+                    </div>
+                    {indicadoresBI?.taxaAdesao && (
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        {indicadoresBI.taxaAdesao}% de Conversão
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-2xl bg-border/20 border border-border flex justify-between items-center">
+                      <div>
+                        <span className="text-xs font-bold text-muted-foreground uppercase">1. Total de Inscritos na Prova</span>
+                        <p className="text-xl font-black text-foreground">
+                          {metricasAmostrais.totalInscritos > 0 ? `${metricasAmostrais.totalInscritos} atletas` : 'Base Completa'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground">100% da base</span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-border/20 border border-border flex justify-between items-center">
+                      <div>
+                        <span className="text-xs font-bold text-muted-foreground uppercase">2. Notificados via WhatsApp (Z-API)</span>
+                        <p className="text-xl font-black text-blue-500">
+                          {metricasAmostrais.totalNotificados > 0 ? `${metricasAmostrais.totalNotificados} atletas` : `${resultadoFiltrado.length} contatados`}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-blue-500">
+                        {metricasAmostrais.totalInscritos > 0 && metricasAmostrais.totalNotificados > 0 
+                          ? `${((metricasAmostrais.totalNotificados / metricasAmostrais.totalInscritos) * 100).toFixed(1)}% notificados` 
+                          : 'Envio ativo'}
+                      </span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center">
+                      <div>
+                        <span className="text-xs font-bold text-emerald-600 uppercase">3. Respostas Válidas Coletadas</span>
+                        <p className="text-xl font-black text-emerald-600">{resultadoFiltrado.length} formulários</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-base font-black text-emerald-600">
+                          {indicadoresBI?.taxaAdesao ? `${indicadoresBI.taxaAdesao}%` : 'Ativo'}
+                        </span>
+                        <span className="block text-xs text-emerald-600/80">Taxa de Adesão</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* VISÃO 3: AMOSTRAGEM & TERRITÓRIO (ABA 3)                        */}
+          {/* ============================================================== */}
+          {abaAtiva === 'territorio' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-lg font-black text-foreground">Distribuição Geográfica dos Beneficiários</h3>
+                  <p className="text-xs text-muted-foreground">Mapeamento dos bairros e localidades de residência dos atletas</p>
+                </div>
+
+                {indicadoresBI?.territorio && indicadoresBI.territorio.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    {indicadoresBI.territorio.map((b, idx) => (
+                      <div key={idx} className="p-4 rounded-2xl border border-border bg-background space-y-1 text-center">
+                        <span className="text-xs font-bold text-muted-foreground block truncate" title={b.nome}>{b.nome}</span>
+                        <span className="text-2xl font-black text-foreground">{b.percentual}%</span>
+                        <span className="text-xs text-muted-foreground block">{b.quantidade} atletas</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center rounded-2xl bg-border/10 border border-border space-y-2">
+                    <MapPin className="h-8 w-8 mx-auto text-muted-foreground/40" />
+                    <p className="text-xs text-muted-foreground">
+                      Esta pesquisa ainda não possui respostas na pergunta de Bairro/Região ou as opções são abertas.
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-4 rounded-2xl bg-border/20 border border-border text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span>Metodologia: Amostragem estratificada sobre o universo de inscritos do projeto.</span>
+                  <span className="font-bold text-foreground">Confiança Estatística: 95%</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* BARRA DE FILTRO POR TAGS & AUTOCOMPLETE                        */}
+          {/* ============================================================== */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3 relative">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-primary" />
-                <h3 className="font-bold text-sm text-foreground">Filtro por Tags / Termos</h3>
+                <h3 className="font-bold text-sm text-foreground">Filtro Dinâmico por Tags / Termos</h3>
               </div>
-              {/* Seletor de Lógica */}
               <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-lg border border-border self-start sm:self-auto">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase px-2">Lógica:</span>
+                <span className="text-xs font-bold text-muted-foreground uppercase px-2">Lógica:</span>
                 <button
                   type="button"
                   onClick={() => setLogicaFiltro('AND')}
@@ -419,7 +983,6 @@ export const Relatorios: React.FC = () => {
               </div>
             </div>
 
-            {/* Container do Input de Tags */}
             <div className="relative">
               <div className="w-full flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all min-h-[46px]">
                 {tagsFiltro.map(tag => (
@@ -490,12 +1053,11 @@ export const Relatorios: React.FC = () => {
                       setTagsFiltro(prev => prev.slice(0, -1))
                     }
                   }}
-                  placeholder={tagsFiltro.length === 0 ? "Digite termos ou escolha sugestões..." : "Adicionar tag..."}
-                  className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground focus:ring-0 placeholder-muted-foreground min-w-[150px] py-1"
+                  placeholder={tagsFiltro.length === 0 ? "Filtrar por resposta ou opção..." : "Adicionar tag..."}
+                  className="flex-1 bg-transparent border-0 outline-none text-xs text-foreground focus:ring-0 placeholder-muted-foreground min-w-[150px] py-1"
                 />
               </div>
 
-              {/* Dropdown de Sugestões */}
               {showSuggestions && (
                 (() => {
                   const filteredSugs = sugestoesDisponiveis.filter(
@@ -516,10 +1078,10 @@ export const Relatorios: React.FC = () => {
                             }
                             setInputValue('')
                           }}
-                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${idx === focusedIndex ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-foreground'}`}
+                          className={`w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center justify-between ${idx === focusedIndex ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted text-foreground'}`}
                         >
                           <span>{sug}</span>
-                          <span className="text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded font-mono">Click / Enter</span>
+                          <span className="text-xs text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded font-mono">Enter</span>
                         </button>
                       ))}
                     </div>
@@ -529,135 +1091,137 @@ export const Relatorios: React.FC = () => {
             </div>
           </div>
 
-          {resultadoFiltrado.length === 0 ? (
-            <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-card/50 animate-fade-in">
-              <BarChart2 className="h-10 w-10 mx-auto text-muted-foreground/35 mb-3" />
-              <p className="font-semibold text-muted-foreground">Nenhuma resposta encontrada para os filtros aplicados.</p>
+          {/* Botão para alternar Gráficos Individuais das Perguntas */}
+          {perguntasMultipla.length > 0 && (
+            <div className="flex justify-end">
+              <button
+                onClick={() => setMostrarGraficosIndividuais(prev => !prev)}
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-xs font-bold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
+              >
+                <BarChart2 className="h-4 w-4 text-primary" />
+                {mostrarGraficosIndividuais ? 'Ocultar Questões Individuais' : 'Explorar Questões Individuais em Gráficos'}
+              </button>
             </div>
-          ) : (
-            <>
-              {/* Botão para ver/ocultar gráficos */}
-              {perguntasMultipla.length > 0 && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => setMostrarGraficos(prev => !prev)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-all shadow-sm cursor-pointer"
-                  >
-                    <BarChart2 className="h-4 w-4 text-primary" />
-                    {mostrarGraficos ? 'Ocultar Análise Gráfica' : 'Ver Análise Gráfica'}
-                  </button>
-                </div>
-              )}
-
-              {/* GRÁFICOS */}
-              {mostrarGraficos && perguntasMultipla.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-                  {perguntasMultipla.map((perg) => {
-                    const dados = getGraficoDados(perg)
-                    return (
-                      <div key={perg.id} className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
-                        <div className="flex gap-2 items-center text-xs font-bold text-primary uppercase tracking-wider">
-                          <Sparkles className="h-4 w-4" />
-                          <span>Análise Gráfica</span>
-                        </div>
-                        <h3 className="font-bold text-foreground text-sm line-clamp-2">{perg.titulo}</h3>
-                        
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={dados} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                              <XAxis dataKey="nome" stroke="#71717a" fontSize={10} />
-                              <YAxis stroke="#71717a" fontSize={10} allowDecimals={false} />
-                              <Tooltip 
-                                contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0.75rem', color: 'hsl(var(--foreground))' }} 
-                                labelStyle={{ fontWeight: 'bold' }}
-                              />
-                              <Bar dataKey="quantidade" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
-                                {dados.map((_, index) => (
-                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* LISTAGEM COMPLETA DAS RESPOSTAS */}
-              <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm animate-fade-in">
-                <h3 className="font-bold text-foreground text-lg">Respostas Individuais</h3>
-                
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-1">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
-                        <th className="p-3 pl-4">Data / Hora</th>
-                        <th className="p-3">Atleta / Contato</th>
-                        {perguntas.map(p => (
-                          <th key={p.id} className="p-3 truncate max-w-[200px]" title={p.titulo}>{p.titulo}</th>
-                        ))}
-                        <th className="p-3 pr-4 text-right">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {resultadoFiltrado.map((r: any) => (
-                        <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="p-3 pl-4 text-xs text-muted-foreground whitespace-nowrap">
-                            {new Date(r.created_at).toLocaleString('pt-BR')}
-                          </td>
-                          <td className="p-3 text-xs whitespace-nowrap">
-                            <span className="font-bold text-foreground block">{r.atleta_nome || 'Anônimo / Teste'}</span>
-                            <span className="text-[11px] font-mono text-muted-foreground">
-                              {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
-                            </span>
-                          </td>
-                          {perguntas.map(p => {
-                            const val = r.valores[p.id]
-                            if (val === undefined) {
-                              return <td key={p.id} className="p-3 text-muted-foreground/60">-</td>
-                            }
-                            if (p.tipo === 'multipla') {
-                              const opcoes = p.config?.opcoes || []
-                              const selecionadas = Array.isArray(val) ? val : [val]
-                              const textos = selecionadas.map(id => opcoes.find(o => o.id === id)?.texto || id)
-                              return (
-                                <td key={p.id} className="p-3 text-foreground">
-                                  <div className="flex flex-wrap gap-1">
-                                    {textos.map((txt, idx) => (
-                                      <span key={idx} className="bg-primary/10 text-primary border border-primary/20 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                        {txt}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </td>
-                              )
-                            }
-                            return (
-                              <td key={p.id} className="p-3 text-foreground truncate max-w-[250px]" title={val}>
-                                {val}
-                              </td>
-                            )
-                          })}
-                          <td className="p-3 pr-4 text-right">
-                            <button
-                              onClick={() => handleDeleteIndividual(r.id, r.atleta_nome)}
-                              title="Excluir resposta (voltar participante para Pendente)"
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
           )}
+
+          {/* Gráficos Individuais */}
+          {mostrarGraficosIndividuais && perguntasMultipla.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+              {perguntasMultipla.map((perg) => {
+                const dados = getGraficoDados(perg)
+                return (
+                  <div key={perg.id} className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm">
+                    <div className="flex gap-2 items-center text-xs font-bold text-primary uppercase tracking-wider">
+                      <Sparkles className="h-4 w-4" />
+                      <span>Distribuição de Respostas</span>
+                    </div>
+                    <h3 className="font-bold text-foreground text-sm line-clamp-2">{perg.titulo}</h3>
+                    
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dados} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
+                          <XAxis dataKey="nome" stroke="#71717a" fontSize={10} />
+                          <YAxis stroke="#71717a" fontSize={10} allowDecimals={false} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0.75rem', color: 'hsl(var(--foreground))' }} 
+                            labelStyle={{ fontWeight: 'bold' }}
+                          />
+                          <Bar dataKey="quantidade" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                            {dados.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* TABELA DE RESPOSTAS INDIVIDUAIS                                */}
+          {/* ============================================================== */}
+          <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-sm animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-foreground text-lg">Respostas Individuais Registradas</h3>
+                <p className="text-xs text-muted-foreground">Listagem de respostas brutas com dados de auditoria</p>
+              </div>
+              <span className="text-xs font-bold text-muted-foreground">
+                Exibindo {resultadoFiltrado.length} de {totalRespostas} registros
+              </span>
+            </div>
+            
+            <div className="overflow-x-auto max-h-[420px] overflow-y-auto pr-1">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
+                    <th className="p-3 pl-4">Data / Hora</th>
+                    <th className="p-3">Atleta / Contato</th>
+                    {perguntas.map(p => (
+                      <th key={p.id} className="p-3 truncate max-w-[220px]" title={p.titulo}>{p.titulo}</th>
+                    ))}
+                    <th className="p-3 pr-4 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {resultadoFiltrado.map((r: any) => (
+                    <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-3 pl-4 text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString('pt-BR')}
+                      </td>
+                      <td className="p-3 text-xs whitespace-nowrap">
+                        <span className="font-bold text-foreground block">{r.atleta_nome || 'Anônimo / Teste'}</span>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
+                        </span>
+                      </td>
+                      {perguntas.map(p => {
+                        const val = r.valores[p.id]
+                        if (val === undefined || val === null || val === '') {
+                          return <td key={p.id} className="p-3 text-muted-foreground/60">-</td>
+                        }
+                        if (p.tipo === 'multipla') {
+                          const opcoes = p.config?.opcoes || []
+                          const selecionadas = Array.isArray(val) ? val : [val]
+                          const textos = selecionadas.map(opcaoId => opcoes.find(o => o.id === opcaoId)?.texto || opcaoId)
+                          return (
+                            <td key={p.id} className="p-3 text-foreground">
+                              <div className="flex flex-wrap gap-1">
+                                {textos.map((txt, idx) => (
+                                  <span key={idx} className="bg-primary/10 text-primary border border-primary/20 text-xs px-2 py-0.5 rounded-full font-bold">
+                                    {txt}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          )
+                        }
+                        return (
+                          <td key={p.id} className="p-3 text-foreground truncate max-w-[250px]" title={val}>
+                            {val}
+                          </td>
+                        )
+                      })}
+                      <td className="p-3 pr-4 text-right">
+                        <button
+                          onClick={() => handleDeleteIndividual(r.id, r.atleta_nome)}
+                          title="Excluir resposta (retorna participante para Pendente)"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
     </div>

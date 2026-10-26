@@ -788,6 +788,32 @@ export const dbService = {
     return { totalRespostas: respostas.length, respostas: formatted }
   },
 
+  async getMetricasAmostrais(pesquisaId: string, objetoId?: string | null): Promise<{
+    totalInscritos: number
+    totalNotificados: number
+  }> {
+    let totalInscritos = 0
+    let totalNotificados = 0
+
+    if (objetoId) {
+      const { count } = await supabase
+        .from('participante')
+        .select('*', { count: 'exact', head: true })
+        .eq('objeto_id', objetoId)
+      totalInscritos = count || 0
+    }
+
+    const { count: dispCount } = await supabase
+      .from('disparo_whatsapp_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('pesquisa_id', pesquisaId)
+      .eq('status', 'enviado')
+
+    totalNotificados = dispCount || 0
+
+    return { totalInscritos, totalNotificados }
+  },
+
   async deleteResposta(respostaId: string, resetarDisparo: boolean = true): Promise<void> {
     // 1. Busca dados da resposta para limpar eventual disparo_log
     const { data: resp } = await supabase
