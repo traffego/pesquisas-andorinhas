@@ -37,6 +37,7 @@ export const Participantes: React.FC = () => {
 
   // Filtros
   const [filtroObjeto, setFiltroObjeto] = useState<string>('')
+  const [filtroPesquisa, setFiltroPesquisa] = useState<string>('')
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'respondeu' | 'pendente'>('todos')
   const [busca, setBusca] = useState<string>('')
 
@@ -83,6 +84,7 @@ export const Participantes: React.FC = () => {
     try {
       const data = await dbService.getParticipantes({
         objetoId: filtroObjeto || undefined,
+        pesquisaId: filtroPesquisa || undefined,
         status: filtroStatus,
         busca: busca || undefined
       })
@@ -97,7 +99,7 @@ export const Participantes: React.FC = () => {
       carregarParticipantes()
     }, 250)
     return () => clearTimeout(timer)
-  }, [filtroObjeto, filtroStatus, busca])
+  }, [filtroObjeto, filtroPesquisa, filtroStatus, busca])
 
   // Métricas
   const totalInscritos = participantes.length
@@ -328,7 +330,10 @@ export const Participantes: React.FC = () => {
           {/* Filtro por Corrida / Objeto */}
           <select
             value={filtroObjeto}
-            onChange={e => setFiltroObjeto(e.target.value)}
+            onChange={e => {
+              setFiltroObjeto(e.target.value)
+              setFiltroPesquisa('')
+            }}
             className="w-full sm:w-56 px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
           >
             <option value="">Todas as Corridas / Projetos</option>
@@ -336,6 +341,22 @@ export const Participantes: React.FC = () => {
               <option key={obj.id} value={obj.id}>{obj.nome}</option>
             ))}
           </select>
+
+          {/* Filtro por Pesquisa Específica */}
+          {filtroObjeto && (
+            <select
+              value={filtroPesquisa}
+              onChange={e => setFiltroPesquisa(e.target.value)}
+              className="w-full sm:w-56 px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer animate-in fade-in"
+            >
+              <option value="">Todas as Pesquisas deste Projeto</option>
+              {pesquisas
+                .filter(p => p.objeto_id === filtroObjeto)
+                .map(p => (
+                  <option key={p.id} value={p.id}>{p.titulo}</option>
+                ))}
+            </select>
+          )}
 
           {/* Filtro por Status */}
           <div className="flex items-center rounded-xl border border-border bg-background p-1 text-xs font-semibold">
