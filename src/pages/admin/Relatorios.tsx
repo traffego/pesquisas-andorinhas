@@ -18,10 +18,11 @@ import {
   Users, 
   ClipboardCheck, 
   Clock, 
-  Sparkles,
-  BarChart2,
-  Filter,
-  X
+  Sparkles, 
+  BarChart2, 
+  Filter, 
+  X,
+  Trash2
 } from 'lucide-react'
 
 const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']
@@ -249,6 +250,39 @@ export const Relatorios: React.FC = () => {
     XLSX.writeFile(workbook, `respostas_${pesquisa.token}.xlsx`)
   }
 
+  const handleDeleteIndividual = async (respostaId: string, atletaNome?: string | null) => {
+    const nome = atletaNome || 'anônimo / de teste'
+    if (!confirm(`Deseja realmente excluir a resposta de "${nome}"?\n\nO participante voltará ao status "Pendente" e essa resposta será removida das métricas.`)) {
+      return
+    }
+
+    try {
+      await dbService.deleteResposta(respostaId, true)
+      if (id) {
+        await loadData(id)
+      }
+      alert('Resposta excluída com sucesso!')
+    } catch (err: any) {
+      alert('Erro ao excluir resposta: ' + err.message)
+    }
+  }
+
+  const handleLimparTodasRespostas = async () => {
+    if (!id || !pesquisa) return
+    const total = relatorioData?.totalRespostas || 0
+    if (!confirm(`ATENÇÃO: Deseja realmente excluir TODAS as ${total} respostas da pesquisa "${pesquisa.titulo}"?\n\nEsta ação irá zerar as respostas e os envios de teste, deixando todos os participantes como pendentes novamente.`)) {
+      return
+    }
+
+    try {
+      await dbService.limparRespostas(id, true)
+      await loadData(id)
+      alert('Todas as respostas foram apagadas com sucesso! A pesquisa está limpa para novos envios.')
+    } catch (err: any) {
+      alert('Erro ao limpar respostas: ' + err.message)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -278,13 +312,23 @@ export const Relatorios: React.FC = () => {
         </div>
 
         {totalRespostas > 0 && (
-          <button
-            onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 active:scale-[0.98] transition-all cursor-pointer self-start sm:self-auto"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Exportar Excel (.xlsx)
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={handleLimparTodasRespostas}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive px-3.5 py-2.5 transition-all cursor-pointer shadow-sm"
+              title="Excluir todas as respostas desta pesquisa para reiniciar testes"
+            >
+              <Trash2 className="h-4 w-4" />
+              Zerar Respostas de Teste
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/20 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Excel (.xlsx)
+            </button>
+          </div>
         )}
       </div>
 
@@ -551,9 +595,11 @@ export const Relatorios: React.FC = () => {
                     <thead>
                       <tr className="border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
                         <th className="p-3 pl-4">Data / Hora</th>
+                        <th className="p-3">Atleta / Contato</th>
                         {perguntas.map(p => (
                           <th key={p.id} className="p-3 truncate max-w-[200px]" title={p.titulo}>{p.titulo}</th>
                         ))}
+                        <th className="p-3 pr-4 text-right">Ação</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -561,6 +607,12 @@ export const Relatorios: React.FC = () => {
                         <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                           <td className="p-3 pl-4 text-xs text-muted-foreground whitespace-nowrap">
                             {new Date(r.created_at).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="p-3 text-xs whitespace-nowrap">
+                            <span className="font-bold text-foreground block">{r.atleta_nome || 'Anônimo / Teste'}</span>
+                            <span className="text-[11px] font-mono text-muted-foreground">
+                              {r.cpf ? `CPF: ${r.cpf}` : (r.telefone ? `Tel: ${r.telefone}` : '-')}
+                            </span>
                           </td>
                           {perguntas.map(p => {
                             const val = r.valores[p.id]
@@ -589,6 +641,15 @@ export const Relatorios: React.FC = () => {
                               </td>
                             )
                           })}
+                          <td className="p-3 pr-4 text-right">
+                            <button
+                              onClick={() => handleDeleteIndividual(r.id, r.atleta_nome)}
+                              title="Excluir resposta (voltar participante para Pendente)"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

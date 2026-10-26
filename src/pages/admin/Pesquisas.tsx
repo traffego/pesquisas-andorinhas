@@ -206,6 +206,21 @@ export const Pesquisas: React.FC = () => {
     }
   }
 
+  const handleZerarRespostas = async (p: Pesquisa) => {
+    const count = respostasCounts[p.id] || 0
+    if (!confirm(`Deseja realmente apagar todas as ${count} respostas da pesquisa "${p.titulo}"?\n\nEsta ação irá zerar as respostas e os registros de envio, deixando todos os atletas como pendentes novamente para novos testes.`)) {
+      return
+    }
+
+    try {
+      await dbService.limparRespostas(p.id, true)
+      await loadAllData()
+      showToast('success', 'Respostas apagadas com sucesso! Todos os atletas voltaram a ficar pendentes.')
+    } catch (err: any) {
+      showToast('error', 'Erro ao apagar respostas: ' + err.message)
+    }
+  }
+
   const pesquisasFiltradas = pesquisas.filter(p => {
     const obj = objetos.find(ob => ob.id === p.objeto_id)
     const lid = lideres.find(l => l.id === p.lider_id)
@@ -299,7 +314,18 @@ export const Pesquisas: React.FC = () => {
                         {lid?.nome || <span className="italic text-muted-foreground/60 text-xs">Sem líder</span>}
                       </td>
                       <td className="p-4 text-center font-semibold text-foreground text-sm">
-                        {respostasCounts[p.id] || 0}
+                        <div className="flex flex-col items-center">
+                          <span>{respostasCounts[p.id] || 0}</span>
+                          {(respostasCounts[p.id] || 0) > 0 && (
+                            <button
+                              onClick={() => handleZerarRespostas(p)}
+                              title="Limpar respostas de teste desta pesquisa"
+                              className="text-[10px] text-destructive hover:underline font-normal cursor-pointer mt-0.5"
+                            >
+                              Zerar testes
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4">
                         <button

@@ -741,11 +741,19 @@ export const dbService = {
   // --- RELATÓRIOS ---
   async getRelatorios(pesquisaId: string): Promise<{
     totalRespostas: number
-    respostas: { id: string; created_at: string; valores: Record<string, any> }[]
+    respostas: {
+      id: string
+      created_at: string
+      cpf?: string | null
+      telefone?: string | null
+      participante_id?: string | null
+      atleta_nome?: string | null
+      valores: Record<string, any>
+    }[]
   }> {
     const { data: respostas, error: respError } = await supabase
       .from('resposta')
-      .select('id, created_at')
+      .select('id, created_at, cpf, telefone, participante_id, participante:participante_id(nome)')
       .eq('pesquisa_id', pesquisaId)
       .order('created_at', { ascending: false })
 
@@ -765,10 +773,60 @@ export const dbService = {
       const rItens = (itens || []).filter(i => i.resposta_id === r.id)
       const valores: Record<string, any> = {}
       rItens.forEach(i => { valores[i.pergunta_id] = i.valor })
-      return { id: r.id, created_at: r.created_at, valores }
+      const pNome = (r.participante as any)?.nome || null
+      return {
+        id: r.id,
+        created_at: r.created_at,
+        cpf: r.cpf,
+        telefone: r.telefone,
+        participante_id: r.participante_id,
+        atleta_nome: pNome,
+        valores
+      }
     })
 
     return { totalRespostas: respostas.length, respostas: formatted }
+  },
+
+  async deleteResposta(respostaId: string, resetarDisparo: boolean = true): Promise<void> {
+    // 1. Busca dados da resposta para limpar eventual disparo_log
+    const { data: resp } = await supabase
+      .from('resposta')
+      .select('id, participante_id, pesquisa_id')
+      .eq('id', respostaId)
+      .maybeSingle()
+
+    // 2. Exclui a resposta (cascateia para resposta_item)
+    const { error: delError } = await supabase
+      .from('resposta')
+      .delete()
+      .eq('id', respostaId)
+
+    if (delError) throw delError
+
+    // 3. Se configurado e houver participante_id, remove também o log de disparo
+    if (resetarDisparo && resp?.participante_id && resp?.pesquisa_id) {
+      await supabase
+        .from('disparo_whatsapp_log')
+        .delete()
+        .eq('pesquisa_id', resp.pesquisa_id)
+        .eq('participante_id', resp.participante_id)
+    }
+  },
+
+  async limparRespostas(pesquisaId: string, resetarDisparos: boolean = true): Promise<void> {
+    // 1. Exclui todas as respostas da pesquisa (cascateia para resposta_item)
+    const { error } = await supabase
+      .from('resposta')
+      .delete()
+      .eq('pesquisa_id', pesquisaId)
+
+    if (error) throw error
+
+    // 2. Se configurado, limpa também os logs de disparo
+    if (resetarDisparos) {
+      await this.limparLogsDisparo(pesquisaId)
+    }
   },
 
   // --- CATEGORIAS DE CAMPO ---

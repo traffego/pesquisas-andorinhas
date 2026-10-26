@@ -23,7 +23,8 @@ import {
   AlertCircle, 
   TrendingUp,
   Download,
-  Phone
+  Phone,
+  RotateCcw
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -164,6 +165,25 @@ export const Participantes: React.FC = () => {
       await carregarParticipantes()
     } catch (err: any) {
       alert('Erro ao excluir: ' + err.message)
+    }
+  }
+
+  const handleExcluirResposta = async (p: ParticipanteComStatus) => {
+    if (!p.resposta_id) {
+      alert('Não foi possível localizar o ID da resposta deste atleta.')
+      return
+    }
+
+    if (!confirm(`Deseja realmente excluir a resposta de "${p.nome}"?\n\nO status do atleta voltará a ser "Pendente", permitindo que ele receba e responda à pesquisa novamente.`)) {
+      return
+    }
+
+    try {
+      await dbService.deleteResposta(p.resposta_id, true)
+      await carregarParticipantes()
+      alert(`Resposta de "${p.nome}" excluída com sucesso! O atleta voltou ao status Pendente.`)
+    } catch (err: any) {
+      alert('Erro ao excluir resposta: ' + err.message)
     }
   }
 
@@ -422,9 +442,18 @@ export const Participantes: React.FC = () => {
                       </td>
                       <td className="p-4 text-center">
                         {p.respondeu ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Respondido
-                          </span>
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Respondido
+                            </span>
+                            <button
+                              onClick={() => handleExcluirResposta(p)}
+                              title="Excluir resposta (voltar para Pendente)"
+                              className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
                             <Clock className="h-3.5 w-3.5" /> Pendente
