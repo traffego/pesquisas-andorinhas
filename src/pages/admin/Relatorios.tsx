@@ -418,7 +418,7 @@ export const Relatorios: React.FC = () => {
   const perguntasMultipla = perguntas.filter(p => p.tipo === 'multipla')
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto text-foreground">
+    <div className="w-full space-y-6 animate-fade-in text-foreground">
       
       {/* Header Executivo */}
       <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
