@@ -59,6 +59,21 @@ export interface ParticipanteComStatus extends Participante {
   resposta_id?: string | null
   resposta_data?: string | null
   respondeu: boolean
+  ja_notificado?: boolean
+  notificado_em?: string | null
+}
+
+export interface DisparoLog {
+  id?: string
+  participante_id: string
+  pesquisa_id: string
+  objeto_id: string
+  telefone: string
+  status: 'enviado' | 'erro'
+  message_id?: string
+  zaap_id?: string
+  erro?: string
+  created_at?: string
 }
 
 export interface ConfigZApi {
@@ -431,25 +446,41 @@ export const dbService = {
     if (error) throw error
     let list = (data || []) as ParticipanteComStatus[]
 
-    // Se uma pesquisa específica for fornecida, recalcula 'respondeu' exclusivamente para essa pesquisa
+    // Se uma pesquisa específica for fornecida, recalcula 'respondeu' e verifica 'ja_notificado'
     if (filtros?.pesquisaId) {
-      const { data: respData } = await supabase
-        .from('resposta')
-        .select('participante_id, cpf, id, created_at')
-        .eq('pesquisa_id', filtros.pesquisaId)
+      const [respRes, dispRes] = await Promise.all([
+        supabase
+          .from('resposta')
+          .select('participante_id, cpf, id, created_at')
+          .eq('pesquisa_id', filtros.pesquisaId),
+        supabase
+          .from('disparo_whatsapp_log')
+          .select('participante_id, created_at')
+          .eq('pesquisa_id', filtros.pesquisaId)
+          .eq('status', 'enviado')
+      ])
 
-      const respList = respData || []
+      const respList = respRes.data || []
+      const dispList = dispRes.data || []
+      const dispMap = new Map<string, string>()
+      dispList.forEach((d: any) => {
+        if (d.participante_id) dispMap.set(d.participante_id, d.created_at)
+      })
+
       list = list.map(p => {
         const pCpfClean = (p.cpf || '').replace(/\D/g, '')
         const rMatch = respList.find(r => 
           (r.participante_id && r.participante_id === p.id) ||
           (pCpfClean && r.cpf && r.cpf.replace(/\D/g, '') === pCpfClean)
         )
+        const notifData = dispMap.get(p.id)
         return {
           ...p,
           respondeu: !!rMatch,
           resposta_id: rMatch?.id || null,
-          resposta_data: rMatch?.created_at || null
+          resposta_data: rMatch?.created_at || null,
+          ja_notificado: !!notifData,
+          notificado_em: notifData || null
         }
       })
     }
@@ -614,6 +645,41 @@ export const dbService = {
 
   async deleteMensagemTemplate(id: string): Promise<void> {
     const { error } = await supabase.from('mensagem_template_objeto').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  // --- LOGS E CONTROLE DE DISPAROS WHATSAPP ---
+  async registrarDisparo(dados: {
+    participanteId: string
+    pesquisaId: string
+    objetoId: string
+    telefone: string
+    status: 'enviado' | 'erro'
+    messageId?: string
+    zaapId?: string
+    erro?: string
+  }): Promise<void> {
+    const { error } = await supabase.from('disparo_whatsapp_log').insert({
+      participante_id: dados.participanteId,
+      pesquisa_id: dados.pesquisaId,
+      objeto_id: dados.objetoId,
+      telefone: dados.telefone.replace(/\D/g, ''),
+      status: dados.status,
+      message_id: dados.messageId || null,
+      zaap_id: dados.zaapId || null,
+      erro: dados.erro || null
+    })
+    if (error) {
+      console.warn('Erro ao registrar log de disparo:', error)
+    }
+  },
+
+  async limparLogsDisparo(pesquisaId: string, objetoId?: string): Promise<void> {
+    let query = supabase.from('disparo_whatsapp_log').delete().eq('pesquisa_id', pesquisaId)
+    if (objetoId) {
+      query = query.eq('objeto_id', objetoId)
+    }
+    const { error } = await query
     if (error) throw error
   },
 

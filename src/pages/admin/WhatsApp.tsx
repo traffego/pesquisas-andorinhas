@@ -91,6 +91,7 @@ export const WhatsAppPage: React.FC = () => {
     enviados: 0,
     erros: 0
   })
+  const [limpandoLogs, setLimpandoLogs] = useState(false)
 
   // Teste individual
   const [telefoneTeste, setTelefoneTeste] = useState('')
@@ -441,16 +442,34 @@ export const WhatsAppPage: React.FC = () => {
   const estatisticasDisparo = useMemo(() => {
     const total = participantesDisparo.length
     const respondidos = participantesDisparo.filter(p => p.respondeu).length
+    const jaNotificados = participantesDisparo.filter(p => !p.respondeu && p.ja_notificado).length
     const pendentes = participantesDisparo.filter(p => !p.respondeu)
-    const aptosParaEnvio = pendentes.filter(p => p.telefone && p.telefone.replace(/\D/g, '').length >= 10)
+    const aptosParaEnvio = pendentes.filter(p => !p.ja_notificado && p.telefone && p.telefone.replace(/\D/g, '').length >= 10)
     return {
       total,
       respondidos,
+      jaNotificados,
       pendentes: pendentes.length,
       aptos: aptosParaEnvio.length,
       listaAptos: aptosParaEnvio
     }
   }, [participantesDisparo])
+
+  const handleLimparLogs = async () => {
+    if (!pesquisaDisparoId) return
+    if (!confirm('Deseja realmente reiniciar o histórico de disparos desta pesquisa?\n\nOs atletas que já receberam a mensagem voltarão a constar como aptos para novo envio (apenas quem ainda não respondeu).')) return
+
+    setLimpandoLogs(true)
+    try {
+      await dbService.limparLogsDisparo(pesquisaDisparoId, objetoDisparo)
+      await carregarParticipantesDoObjeto(objetoDisparo, pesquisaDisparoId)
+      alert('Histórico de envios reiniciado com sucesso! Os atletas pendentes estão aptos novamente.')
+    } catch (err: any) {
+      alert('Erro ao reiniciar histórico: ' + err.message)
+    } finally {
+      setLimpandoLogs(false)
+    }
+  }
 
   const previewMensagemReal = useMemo(() => {
     const obj = objetos.find(o => o.id === objetoDisparo)
@@ -555,13 +574,45 @@ export const WhatsAppPage: React.FC = () => {
 
       try {
         const res = await ZApiService.enviarTexto(configZApi!, p.telefone!, msg)
+        if (res.sucesso) {
+          await dbService.registrarDisparo({
+            participanteId: p.id,
+            pesquisaId: pesquisaDisparoId,
+            objetoId: objetoDisparo,
+            telefone: p.telefone!,
+            status: 'enviado',
+            messageId: res.messageId,
+            zaapId: res.zaapId
+          })
+          p.ja_notificado = true
+          p.notificado_em = new Date().toISOString()
+        } else {
+          await dbService.registrarDisparo({
+            participanteId: p.id,
+            pesquisaId: pesquisaDisparoId,
+            objetoId: objetoDisparo,
+            telefone: p.telefone!,
+            status: 'erro',
+            erro: res.erro || 'Falha no envio Z-API'
+          })
+        }
+
         setProgressoLote(prev => ({
           ...prev,
           atual: i + 1,
           enviados: res.sucesso ? prev.enviados + 1 : prev.enviados,
           erros: res.sucesso ? prev.erros : prev.erros + 1
         }))
-      } catch (err) {
+      } catch (err: any) {
+        await dbService.registrarDisparo({
+          participanteId: p.id,
+          pesquisaId: pesquisaDisparoId,
+          objetoId: objetoDisparo,
+          telefone: p.telefone!,
+          status: 'erro',
+          erro: err?.message || 'Exceção ao disparar'
+        }).catch(() => {})
+
         setProgressoLote(prev => ({
           ...prev,
           atual: i + 1,
@@ -576,6 +627,9 @@ export const WhatsAppPage: React.FC = () => {
     }
 
     setEmLoteProcessando(false)
+    if (objetoDisparo) {
+      await carregarParticipantesDoObjeto(objetoDisparo, pesquisaDisparoId)
+    }
   }
 
   if (loading) {
@@ -1205,18 +1259,45 @@ export const WhatsAppPage: React.FC = () => {
                 <p className="text-xl font-black text-foreground">{carregandoParticipantes ? '...' : estatisticasDisparo.total}</p>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Já Responderam Esta</p>
+                <p className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Já Responderam</p>
                 <p className="text-xl font-black text-emerald-600">{carregandoParticipantes ? '...' : estatisticasDisparo.respondidos}</p>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase text-amber-500 tracking-wider">Pendentes Desta</p>
-                <p className="text-xl font-black text-amber-500">{carregandoParticipantes ? '...' : estatisticasDisparo.pendentes}</p>
+                <p className="text-[11px] font-extrabold uppercase text-blue-500 tracking-wider">Mensagens Enviadas</p>
+                <p className="text-xl font-black text-blue-500">{carregandoParticipantes ? '...' : estatisticasDisparo.jaNotificados}</p>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase text-primary tracking-wider">Aptos (Com Telefone)</p>
+                <p className="text-[11px] font-extrabold uppercase text-primary tracking-wider">Restantes para Envio</p>
                 <p className="text-xl font-black text-primary">{carregandoParticipantes ? '...' : estatisticasDisparo.aptos}</p>
               </div>
             </div>
+
+            {/* Banner de Proteção contra Interrupção & Botão de Reset */}
+            {estatisticasDisparo.jaNotificados > 0 && (
+              <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-foreground block">
+                      Proteção contra Interrupção e Retomada Automática Ativa:
+                    </span>
+                    <span className="text-muted-foreground">
+                      <strong>{estatisticasDisparo.jaNotificados} atleta(s)</strong> já receberam notificação no WhatsApp para esta pesquisa e não receberão mensagem duplicada. Se o envio parou no meio por qualquer motivo, ao clicar em "Retomar Disparo", o sistema continuará apenas com os <strong>{estatisticasDisparo.aptos} atleta(s) restantes</strong>.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLimparLogs}
+                  disabled={limpandoLogs}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-muted-foreground hover:text-foreground shrink-0 transition-colors cursor-pointer"
+                  title="Limpar o registro de envio para permitir reenviar a todos os pendentes"
+                >
+                  <RotateCcw className={`h-3.5 w-3.5 ${limpandoLogs ? 'animate-spin' : ''}`} />
+                  {limpandoLogs ? 'Reiniciando...' : 'Reiniciar Envios (Zerar Histórico)'}
+                </button>
+              </div>
+            )}
 
             {/* Preview Real do Balão WhatsApp */}
             <div className="space-y-2">
@@ -1276,7 +1357,9 @@ export const WhatsAppPage: React.FC = () => {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-sm shadow-lg transition-all cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                Iniciar Disparo em Massa ({estatisticasDisparo.aptos} Atletas Pendentes)
+                {estatisticasDisparo.jaNotificados > 0 
+                  ? `Retomar Disparo (${estatisticasDisparo.aptos} Restantes)`
+                  : `Iniciar Disparo em Massa (${estatisticasDisparo.aptos} Atletas)`}
               </button>
             </div>
           </div>
