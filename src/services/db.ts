@@ -67,7 +67,7 @@ export interface ParticipanteComStatus extends Participante {
 }
 
 export interface DisparoLog {
-  id?: string
+  id: string
   campanha_id?: string | null
   participante_id: string
   pesquisa_id: string
@@ -80,6 +80,14 @@ export interface DisparoLog {
   entregue_em?: string | null
   lido_em?: string | null
   created_at?: string
+  participante?: {
+    id?: string
+    nome?: string
+    cpf?: string
+    dados_extras?: any
+  }
+  respondeu?: boolean
+  respondeu_em?: string | null
 }
 
 export interface CampanhaDisparo {
@@ -804,14 +812,38 @@ export const dbService = {
   },
 
   async getLogsCampanha(campanhaId: string): Promise<DisparoLog[]> {
-    const { data, error } = await supabase
+    const { data: logs, error } = await supabase
       .from('disparo_whatsapp_log')
-      .select('*')
+      .select('*, participante:participante_id(id, nome, cpf, dados_extras)')
       .eq('campanha_id', campanhaId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return data || []
+    if (!logs || logs.length === 0) return []
+
+    const pesquisaId = logs[0]?.pesquisa_id
+    const partIds = logs.map((l: any) => l.participante_id).filter(Boolean)
+
+    const respMap = new Map<string, string>()
+    if (pesquisaId && partIds.length > 0) {
+      const { data: resps } = await supabase
+        .from('resposta')
+        .select('participante_id, created_at')
+        .eq('pesquisa_id', pesquisaId)
+        .in('participante_id', partIds)
+
+      ;(resps || []).forEach((r: any) => {
+        if (r.participante_id) {
+          respMap.set(r.participante_id, r.created_at)
+        }
+      })
+    }
+
+    return logs.map((l: any) => ({
+      ...l,
+      respondeu: respMap.has(l.participante_id),
+      respondeu_em: respMap.get(l.participante_id) || null
+    }))
   },
 
   async getEstatisticasCampanha(campanhaId: string): Promise<{

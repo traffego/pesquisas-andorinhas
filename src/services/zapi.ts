@@ -316,6 +316,50 @@ export class ZApiService {
   }
 
   /**
+   * Consulta o status atual da instância e do webhook de status diretamente na Z-API
+   * Endpoint: GET https://api.z-api.io/instances/{instanceId}/token/{token}/me
+   */
+  static async verificarStatusWebhook(
+    config: ConfigZApi
+  ): Promise<{
+    ativo: boolean
+    urlConfigurada?: string
+    conectadoWhatsApp?: boolean
+    erro?: string
+  }> {
+    if (!this.isConfigValida(config)) {
+      return { ativo: false, erro: 'Credenciais inválidas' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/me`
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Client-Token': config.client_token.trim()
+        }
+      })
+
+      if (!response.ok) {
+        return { ativo: false, erro: `HTTP ${response.status}` }
+      }
+
+      const data = await response.json()
+      const urlConfigurada = data.messageStatusCallbackUrl || data.receivedAndDeliveryCallbackUrl || ''
+      const ativo = !!urlConfigurada && urlConfigurada.includes('zapi-webhook')
+
+      return {
+        ativo,
+        urlConfigurada,
+        conectadoWhatsApp: !!data.connected
+      }
+    } catch (err: any) {
+      return { ativo: false, erro: err?.message }
+    }
+  }
+
+  /**
    * Gera link de fallback wa.me caso a Z-API não esteja configurada
    */
   static gerarLinkWaMe(phone: string, message: string): string {

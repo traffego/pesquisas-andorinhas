@@ -122,6 +122,7 @@ export const WhatsAppPage: React.FC = () => {
   // Webhook Z-API
   const [webhookConfigurando, setWebhookConfigurando] = useState(false)
   const [webhookFeedback, setWebhookFeedback] = useState<{ sucesso: boolean; msg: string } | null>(null)
+  const [webhookStatus, setWebhookStatus] = useState<{ checado: boolean; ativo: boolean; url?: string } | null>(null)
 
   // Timeline / Histórico do Atleta
   const [atletaTimeline, setAtletaTimeline] = useState<ParticipanteComStatus | null>(null)
@@ -189,8 +190,12 @@ export const WhatsAppPage: React.FC = () => {
 
     setVerificandoStatus(true)
     try {
-      const res = await ZApiService.obterStatus(config)
+      const [res, wRes] = await Promise.all([
+        ZApiService.obterStatus(config),
+        ZApiService.verificarStatusWebhook(config)
+      ])
       setStatusConexao(res)
+      setWebhookStatus({ checado: true, ativo: wRes.ativo, url: wRes.urlConfigurada })
       if (res.connected) {
         setQrCodeImg(null)
         setQrErro(null)
@@ -465,9 +470,10 @@ export const WhatsAppPage: React.FC = () => {
     try {
       const res = await ZApiService.configurarWebhookMessageStatus(configZApi, webhookUrl)
       if (res.sucesso) {
+        setWebhookStatus({ checado: true, ativo: true, url: webhookUrl })
         setWebhookFeedback({
           sucesso: true,
-          msg: 'Webhook ativado na Z-API com sucesso! As mensagens agora serão atualizadas em tempo real para Entregue e Lido (Check Azul).'
+          msg: 'Webhook configurado e ativo permanentemente na Z-API! As mensagens serão atualizadas em tempo real para Entregue e Lido (Check Azul).'
         })
       } else {
         setWebhookFeedback({
@@ -1251,12 +1257,23 @@ export const WhatsAppPage: React.FC = () => {
             <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-black uppercase text-foreground tracking-wider flex items-center gap-1.5">
-                    <CheckCheck className="h-4 w-4 text-blue-600" />
-                    Webhook de Status em Tempo Real (Z-API)
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-black uppercase text-foreground tracking-wider flex items-center gap-1.5">
+                      <CheckCheck className="h-4 w-4 text-blue-600" />
+                      Webhook de Status em Tempo Real (Z-API)
+                    </h4>
+                    {webhookStatus?.checado && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        webhookStatus.ativo 
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' 
+                          : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                      }`}>
+                        {webhookStatus.ativo ? '✓ Ativo e Monitorando' : 'Não configurado'}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Receba notificações automáticas de <strong>Entregue</strong> e <strong>Lido (Check Azul)</strong> diretamente no banco.
+                    Receba notificações automáticas de <strong>Entregue</strong> e <strong>Lido (Check Azul)</strong> diretamente no banco. Fica salvo permanentemente na Z-API.
                   </p>
                 </div>
               </div>
@@ -1269,10 +1286,14 @@ export const WhatsAppPage: React.FC = () => {
                   type="button"
                   onClick={handleConfigurarWebhookAutomatico}
                   disabled={webhookConfigurando}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 ${
+                    webhookStatus?.ativo
+                      ? 'bg-muted hover:bg-muted/80 text-foreground border border-border'
+                      : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white'
+                  }`}
                 >
                   <RefreshCw className={`h-3 w-3 ${webhookConfigurando ? 'animate-spin' : ''}`} />
-                  {webhookConfigurando ? 'Ativando...' : 'Ativar Webhook na Z-API'}
+                  {webhookConfigurando ? 'Atualizando...' : webhookStatus?.ativo ? 'Reconfigurar Webhook' : 'Ativar Webhook na Z-API'}
                 </button>
               </div>
 
