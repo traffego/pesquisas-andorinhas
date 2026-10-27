@@ -244,6 +244,35 @@ export const Participantes: React.FC = () => {
     try {
       const res = await ZApiService.enviarTexto(configZApi!, partParaEnvio.telefone, msgIndividual)
       if (res.sucesso) {
+        // Registra o disparo na base para monitoramento do Webhook e histórico/timeline
+        const pesq = getPesquisaPorObjeto(partParaEnvio.objeto_id)
+        try {
+          await dbService.registrarDisparo({
+            participanteId: partParaEnvio.id,
+            pesquisaId: pesq?.id,
+            objetoId: partParaEnvio.objeto_id,
+            telefone: partParaEnvio.telefone,
+            status: 'enviado',
+            messageId: res.messageId,
+            zaapId: res.zaapId
+          })
+        } catch (logErr) {
+          console.warn('Erro ao registrar log de disparo individual:', logErr)
+        }
+
+        // Atualiza o participante na lista em memória para refletir o status imediatamente
+        setParticipantes(prev => prev.map(item => {
+          if (item.id === partParaEnvio.id) {
+            return {
+              ...item,
+              ja_notificado: true,
+              notificado_em: new Date().toISOString(),
+              status_whatsapp: 'enviado'
+            }
+          }
+          return item
+        }))
+
         setStatusEnvioIndividual({ sucesso: true, msg: 'Mensagem enviada com sucesso pelo WhatsApp!' })
         setTimeout(() => setModalEnvioIndividualOpen(false), 1500)
       } else {

@@ -694,7 +694,7 @@ export const dbService = {
   // --- LOGS E CONTROLE DE DISPAROS WHATSAPP ---
   async registrarDisparo(dados: {
     participanteId: string
-    pesquisaId: string
+    pesquisaId?: string
     objetoId: string
     telefone: string
     status: 'enviado' | 'entregue' | 'lido' | 'erro'
@@ -706,7 +706,7 @@ export const dbService = {
     const { error } = await supabase.from('disparo_whatsapp_log').insert({
       campanha_id: dados.campanhaId || null,
       participante_id: dados.participanteId,
-      pesquisa_id: dados.pesquisaId,
+      pesquisa_id: dados.pesquisaId || null,
       objeto_id: dados.objetoId,
       telefone: dados.telefone.replace(/\D/g, ''),
       status: dados.status,
