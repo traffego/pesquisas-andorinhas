@@ -238,10 +238,14 @@ export function calcularCruzamentoCategorias(
   respostas.forEach(r => {
     const valX = r.valores[perguntaX.id]
     const valY = r.valores[perguntaY.id]
-    if (!valX || !valY) return
+    if (valX === undefined || valX === null || valY === undefined || valY === null) return
 
-    const itemX = opcoesX.find(o => o.id === valX || norm(o.texto) === norm(String(valX)))
-    const itemY = opcoesY.find(o => o.id === valY || norm(o.texto) === norm(String(valY)))
+    const rawX = Array.isArray(valX) ? valX[0] : valX
+    const rawY = Array.isArray(valY) ? valY[0] : valY
+    if (!rawX || !rawY) return
+
+    const itemX = opcoesX.find(o => o.id === rawX || norm(o.texto) === norm(String(rawX)))
+    const itemY = opcoesY.find(o => o.id === rawY || norm(o.texto) === norm(String(rawY)))
 
     if (itemX && itemY) {
       totalGeralValido += 1
@@ -367,7 +371,9 @@ export function processarRelatorioCorridaBI(params: {
     if (dist) {
       const positivas = dist.filter(d => {
         const n = norm(d.nome)
-        return n.includes('muito boa') || n.includes('boa') || n.includes('muito satisf') || n.includes('satisf') || n.includes('excelente')
+        const isNegativo = n.includes('insatisf') || n.includes('ruim') || n.includes('pessim')
+        if (isNegativo) return false
+        return n.includes('muito boa') || n.includes('boa') || n.includes('satisf') || n.includes('excelente') || n.includes('otim')
       })
       const totalPositivo = positivas.reduce((acc, curr) => acc + curr.quantidade, 0)
       const totalGeral = dist.reduce((acc, curr) => acc + curr.quantidade, 0)
@@ -395,6 +401,8 @@ export function processarRelatorioCorridaBI(params: {
     if (dist) {
       const retorno = dist.filter(d => {
         const n = norm(d.nome)
+        const isNegativo = n.includes('nao') || n.includes('nunca')
+        if (isNegativo) return false
         return n.includes('com certeza') || n.includes('provavelmente') || n.startsWith('sim')
       })
       const totalRetorno = retorno.reduce((acc, curr) => acc + curr.quantidade, 0)

@@ -644,8 +644,8 @@ export const Relatorios: React.FC = () => {
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-amber-500 h-full rounded-full" 
-                      style={{ width: `${indicadoresBI?.estreantes?.percentualEstreantes || 100}%` }}
+                      className="bg-amber-500 h-full rounded-full transition-all" 
+                      style={{ width: `${indicadoresBI?.estreantes?.percentualEstreantes ?? 0}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
@@ -655,25 +655,75 @@ export const Relatorios: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Card 2: Paridade de Gênero */}
+                {/* Card 2: Perfil de Gênero */}
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-2">
                   <div className="flex justify-between items-start">
-                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Paridade de Gênero</span>
-                    <span className="text-xs font-black px-2 py-0.5 rounded-md bg-pink-500/10 text-pink-600 border border-pink-500/20">Equilíbrio</span>
+                    <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Perfil de Gênero</span>
+                    {(() => {
+                      if (!indicadoresBI?.genero || indicadoresBI.genero.total === 0) {
+                        return <span className="text-xs font-black px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border">Sem Dados</span>
+                      }
+                      const diff = Math.abs(indicadoresBI.genero.feminino.pct - indicadoresBI.genero.masculino.pct)
+                      if (diff <= 10) {
+                        return <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Equilíbrio (±10%)</span>
+                      }
+                      if (indicadoresBI.genero.feminino.pct > indicadoresBI.genero.masculino.pct) {
+                        return <span className="text-xs font-black px-2 py-0.5 rounded-md bg-pink-500/10 text-pink-600 border border-pink-500/20">Maioria Feminina</span>
+                      }
+                      return <span className="text-xs font-black px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/20">Maioria Masculina</span>
+                    })()}
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-pink-500">
-                      {indicadoresBI?.genero ? `${indicadoresBI.genero.feminino.pct}%` : '-'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">Mulheres</span>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-pink-500">
+                          {indicadoresBI?.genero ? `${indicadoresBI.genero.feminino.pct}%` : '-'}
+                        </span>
+                        <span className="text-[11px] font-bold text-muted-foreground">Mulheres</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {indicadoresBI?.genero ? `${indicadoresBI.genero.feminino.count} ${indicadoresBI.genero.feminino.count === 1 ? 'atleta' : 'atletas'}` : '0'}
+                      </span>
+                    </div>
+
+                    <div className="h-7 w-px bg-border/80" />
+
+                    <div className="text-right">
+                      <div className="flex items-baseline justify-end gap-1">
+                        <span className="text-2xl font-black text-blue-500">
+                          {indicadoresBI?.genero ? `${indicadoresBI.genero.masculino.pct}%` : '-'}
+                        </span>
+                        <span className="text-[11px] font-bold text-muted-foreground">Homens</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {indicadoresBI?.genero ? `${indicadoresBI.genero.masculino.count} ${indicadoresBI.genero.masculino.count === 1 ? 'atleta' : 'atletas'}` : '0'}
+                      </span>
+                    </div>
                   </div>
+
                   <div className="w-full bg-border h-2 rounded-full flex overflow-hidden">
-                    <div className="bg-pink-500 h-full" style={{ width: `${indicadoresBI?.genero?.feminino.pct || 50}%` }} />
-                    <div className="bg-blue-500 h-full" style={{ width: `${indicadoresBI?.genero?.masculino.pct || 50}%` }} />
+                    <div 
+                      className="bg-pink-500 h-full transition-all" 
+                      style={{ width: `${indicadoresBI?.genero?.feminino.pct ?? 0}%` }} 
+                      title={`Mulheres: ${indicadoresBI?.genero?.feminino.pct ?? 0}%`}
+                    />
+                    <div 
+                      className="bg-blue-500 h-full transition-all" 
+                      style={{ width: `${indicadoresBI?.genero?.masculino.pct ?? 0}%` }} 
+                      title={`Homens: ${indicadoresBI?.genero?.masculino.pct ?? 0}%`}
+                    />
+                    {((indicadoresBI?.genero?.outros.pct ?? 0) > 0) && (
+                      <div 
+                        className="bg-purple-500 h-full transition-all" 
+                        style={{ width: `${indicadoresBI?.genero?.outros.pct}%` }} 
+                        title={`Outros: ${indicadoresBI?.genero?.outros.pct}%`}
+                      />
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
                     {indicadoresBI?.genero 
-                      ? `${indicadoresBI.genero.feminino.count} mulheres e ${indicadoresBI.genero.masculino.count} homens.`
+                      ? `${indicadoresBI.genero.total} ${indicadoresBI.genero.total === 1 ? 'respondente apurado' : 'respondentes apurados'}.`
                       : 'Divisão por gênero apurada.'}
                   </p>
                 </div>
@@ -690,7 +740,7 @@ export const Relatorios: React.FC = () => {
                     </span>
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
-                    <div className="bg-purple-500 h-full rounded-full" style={{ width: `${indicadoresBI?.faixaEtariaDominante?.percentual || 100}%` }} />
+                    <div className="bg-purple-500 h-full rounded-full transition-all" style={{ width: `${indicadoresBI?.faixaEtariaDominante?.percentual ?? 0}%` }} />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
                     {indicadoresBI?.faixaEtariaDominante 
@@ -712,7 +762,7 @@ export const Relatorios: React.FC = () => {
                     <span className="text-xs text-muted-foreground">da base</span>
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${indicadoresBI?.rendaAte2SM?.percentual || 0}%` }} />
+                    <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${indicadoresBI?.rendaAte2SM?.percentual ?? 0}%` }} />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
                     {indicadoresBI?.rendaAte2SM 
@@ -738,9 +788,9 @@ export const Relatorios: React.FC = () => {
                     </span>
                   </div>
 
-                  {indicadoresBI?.cruzamentoGeneroEstreantes && indicadoresBI.cruzamentoGeneroEstreantes.length > 0 ? (
+                  {indicadoresBI?.cruzamentoGeneroEstreantes && indicadoresBI.cruzamentoGeneroEstreantes.filter(i => i.totalX > 0).length > 0 ? (
                     <div className="space-y-4 pt-1">
-                      {indicadoresBI.cruzamentoGeneroEstreantes.map((item, idx) => {
+                      {indicadoresBI.cruzamentoGeneroEstreantes.filter(i => i.totalX > 0).map((item, idx) => {
                         const simItem = item.distribuicaoY.find(y => y.opcaoY.toLowerCase().startsWith('sim'))
                         const pctEstreante = simItem ? simItem.percentualNaOpcaoX : 0
                         const isFem = item.opcaoX.toLowerCase().includes('fem')
@@ -750,12 +800,12 @@ export const Relatorios: React.FC = () => {
                         return (
                           <div key={idx} className="space-y-1">
                             <div className="flex justify-between text-xs font-semibold">
-                              <span className={`${textColor} font-bold`}>{item.opcaoX} ({item.totalX} atletas)</span>
-                              <span>{pctEstreante}% Estreantes ({simItem?.quantidade || 0} atletas)</span>
+                              <span className={`${textColor} font-bold`}>{item.opcaoX} ({item.totalX} {item.totalX === 1 ? 'atleta' : 'atletas'})</span>
+                              <span>{pctEstreante}% Estreantes ({simItem?.quantidade || 0} {simItem?.quantidade === 1 ? 'atleta' : 'atletas'})</span>
                             </div>
                             <div className="h-3 w-full bg-border rounded-full flex overflow-hidden">
-                              <div className={`${barColor} h-full`} style={{ width: `${pctEstreante}%` }} title={`Estreantes: ${pctEstreante}%`} />
-                              <div className="bg-muted h-full" style={{ width: `${100 - pctEstreante}%` }} title={`Veteranos: ${100 - pctEstreante}%`} />
+                              <div className={`${barColor} h-full transition-all`} style={{ width: `${pctEstreante}%` }} title={`Estreantes: ${pctEstreante}%`} />
+                              <div className="bg-muted h-full transition-all" style={{ width: `${100 - pctEstreante}%` }} title={`Veteranos: ${100 - pctEstreante}%`} />
                             </div>
                           </div>
                         )
@@ -852,18 +902,18 @@ export const Relatorios: React.FC = () => {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black text-emerald-600">
-                      {indicadoresBI?.aprovacaoGeral ? `${indicadoresBI.aprovacaoGeral.percentual}%` : '100%'}
+                      {indicadoresBI?.aprovacaoGeral ? `${indicadoresBI.aprovacaoGeral.percentual}%` : '-'}
                     </span>
                     <span className="text-xs text-muted-foreground">Muito Boa + Boa</span>
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-emerald-500 h-full rounded-full" 
-                      style={{ width: `${indicadoresBI?.aprovacaoGeral?.percentual || 100}%` }}
+                      className="bg-emerald-500 h-full rounded-full transition-all" 
+                      style={{ width: `${indicadoresBI?.aprovacaoGeral?.percentual ?? 0}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
-                    Base: {resultadoFiltrado.length} respostas coletadas.
+                    Base: {resultadoFiltrado.length} {resultadoFiltrado.length === 1 ? 'resposta coletada' : 'respostas coletadas'}.
                   </p>
                 </div>
 
@@ -881,12 +931,12 @@ export const Relatorios: React.FC = () => {
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-blue-500 h-full rounded-full" 
-                      style={{ width: `${indicadoresBI?.fidelizacao?.percentual || 100}%` }}
+                      className="bg-blue-500 h-full rounded-full transition-all" 
+                      style={{ width: `${indicadoresBI?.fidelizacao?.percentual ?? 0}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
-                    {indicadoresBI?.fidelizacao ? `${indicadoresBI.fidelizacao.retorno} atletas confirmaram retorno.` : 'Índice de fidelização.'}
+                    {indicadoresBI?.fidelizacao ? `${indicadoresBI.fidelizacao.retorno} ${indicadoresBI.fidelizacao.retorno === 1 ? 'atleta confirmou' : 'atletas confirmaram'} retorno.` : 'Índice de fidelização.'}
                   </p>
                 </div>
 
@@ -904,8 +954,8 @@ export const Relatorios: React.FC = () => {
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
                     <div 
-                      className="bg-purple-500 h-full rounded-full" 
-                      style={{ width: `${indicadoresBI?.metaFomento?.percentual || 100}%` }}
+                      className="bg-purple-500 h-full rounded-full transition-all" 
+                      style={{ width: `${indicadoresBI?.metaFomento?.percentual ?? 0}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
@@ -926,7 +976,10 @@ export const Relatorios: React.FC = () => {
                     <span className="text-xs text-muted-foreground">Margem Erro</span>
                   </div>
                   <div className="w-full bg-border h-2 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
+                    <div 
+                      className="bg-emerald-500 h-full rounded-full transition-all" 
+                      style={{ width: `${Math.max(5, Math.min(100, 100 - (indicadoresBI?.margemErro || 0)))}%` }} 
+                    />
                   </div>
                   <p className="text-xs text-muted-foreground pt-1">
                     {metricasAmostrais.totalInscritos > 0 

@@ -1110,7 +1110,7 @@ export const dbService = {
       .from('disparo_whatsapp_log')
       .select('*', { count: 'exact', head: true })
       .eq('pesquisa_id', pesquisaId)
-      .eq('status', 'enviado')
+      .in('status', ['enviado', 'entregue', 'lido'])
 
     totalNotificados = dispCount || 0
 
