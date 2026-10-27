@@ -273,6 +273,49 @@ export class ZApiService {
   }
 
   /**
+   * Configura o webhook de status da mensagem (SENT, RECEIVED, READ) na Z-API
+   * Endpoint: PUT https://api.z-api.io/instances/{instanceId}/token/{token}/update-webhook-message-status
+   */
+  static async configurarWebhookMessageStatus(
+    config: ConfigZApi,
+    webhookUrl: string
+  ): Promise<{ sucesso: boolean; erro?: string }> {
+    if (!this.isConfigValida(config)) {
+      return { sucesso: false, erro: 'Credenciais Z-API não configuradas.' }
+    }
+
+    const url = `https://api.z-api.io/instances/${config.instance_id.trim()}/token/${config.instance_token.trim()}/update-webhook-message-status`
+
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Client-Token': config.client_token.trim()
+        },
+        body: JSON.stringify({
+          value: webhookUrl
+        })
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        return {
+          sucesso: false,
+          erro: data?.message || data?.error || `Erro Z-API [HTTP ${response.status}]`
+        }
+      }
+
+      return { sucesso: true }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        erro: err?.message || 'Falha na comunicação ao configurar webhook na Z-API.'
+      }
+    }
+  }
+
+  /**
    * Gera link de fallback wa.me caso a Z-API não esteja configurada
    */
   static gerarLinkWaMe(phone: string, message: string): string {

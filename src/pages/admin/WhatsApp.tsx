@@ -5,7 +5,9 @@ import {
   type Pesquisa, 
   type ParticipanteComStatus, 
   type ConfigZApi,
-  type MensagemTemplateObjeto
+  type MensagemTemplateObjeto,
+  type CampanhaDisparo,
+  type DisparoLog
 } from '../../services/db'
 import { ZApiService, type StatusZApiResultado } from '../../services/zapi'
 import { 
@@ -30,7 +32,13 @@ import {
   Clock,
   Sparkles,
   Copy,
-  Check
+  Check,
+  CheckCheck,
+  ArrowLeft,
+  History as HistoryIcon,
+  Eye,
+  Layers,
+  Search
 } from 'lucide-react'
 
 export const WhatsAppPage: React.FC = () => {
@@ -73,7 +81,6 @@ export const WhatsAppPage: React.FC = () => {
   // Aba Disparos
   const [objetoDisparo, setObjetoDisparo] = useState<string>('')
   const [pesquisaDisparoId, setPesquisaDisparoId] = useState<string>('')
-  const [templateDisparoId, setTemplateDisparoId] = useState<string>('')
   const [mensagemCustomizadaDisparo, setMensagemCustomizadaDisparo] = useState<string>('')
   const [participantesDisparo, setParticipantesDisparo] = useState<ParticipanteComStatus[]>([])
   const [carregandoParticipantes, setCarregandoParticipantes] = useState(false)
@@ -97,6 +104,30 @@ export const WhatsAppPage: React.FC = () => {
   const [telefoneTeste, setTelefoneTeste] = useState('')
   const [enviandoTeste, setEnviandoTeste] = useState(false)
   const [feedbackTeste, setFeedbackTeste] = useState<{ sucesso: boolean; msg: string } | null>(null)
+
+  // --- GESTÃO DE CAMPANHAS DE DISPARO ---
+  const [campanhas, setCampanhas] = useState<CampanhaDisparo[]>([])
+  const [campanhaAtiva, setCampanhaAtiva] = useState<CampanhaDisparo | null>(null)
+  const [carregandoCampanhas, setCarregandoCampanhas] = useState(false)
+  const [modalNovaCampanhaOpen, setModalNovaCampanhaOpen] = useState(false)
+  const [filtroPublicoNovaCampanha, setFiltroPublicoNovaCampanha] = useState<'todos' | 'pendentes' | 'nao_lidos'>('todos')
+  const [nomeNovaCampanha, setNomeNovaCampanha] = useState('')
+  const [pesquisaNovaCampanhaId, setPesquisaNovaCampanhaId] = useState('')
+  const [mensagemNovaCampanha, setMensagemNovaCampanha] = useState('')
+  const [salvandoCampanha, setSalvandoCampanha] = useState(false)
+  const [filtroStatusCockpit, setFiltroStatusCockpit] = useState<'todos' | 'lido' | 'entregue' | 'enviado' | 'respondido' | 'pendente'>('todos')
+  const [buscaCockpit, setBuscaCockpit] = useState('')
+  const [logsCampanhaAtiva, setLogsCampanhaAtiva] = useState<DisparoLog[]>([])
+
+  // Webhook Z-API
+  const [webhookConfigurando, setWebhookConfigurando] = useState(false)
+  const [webhookFeedback, setWebhookFeedback] = useState<{ sucesso: boolean; msg: string } | null>(null)
+
+  // Timeline / Histórico do Atleta
+  const [atletaTimeline, setAtletaTimeline] = useState<ParticipanteComStatus | null>(null)
+  const [historicoTimeline, setHistoricoTimeline] = useState<any[]>([])
+  const [carregandoTimeline, setCarregandoTimeline] = useState(false)
+  const [modalTimelineOpen, setModalTimelineOpen] = useState(false)
 
   // --- CARREGAMENTO INICIAL ---
   useEffect(() => {
@@ -128,6 +159,7 @@ export const WhatsAppPage: React.FC = () => {
         const pesqsPrimeiro = pesqs.filter(p => p.objeto_id === objs[0].id)
         if (pesqsPrimeiro.length > 0) {
           setPesquisaDisparoId(pesqsPrimeiro[0].id)
+          carregarCampanhas(pesqsPrimeiro[0].id, objs[0].id)
         }
       }
 
@@ -387,6 +419,7 @@ export const WhatsAppPage: React.FC = () => {
   useEffect(() => {
     if (objetoDisparo) {
       carregarParticipantesDoObjeto(objetoDisparo, pesquisaDisparoId)
+      carregarCampanhas(pesquisaDisparoId, objetoDisparo)
       
       const tpls = templates.filter(t => {
         if (t.objeto_id !== objetoDisparo) return false
@@ -397,15 +430,178 @@ export const WhatsAppPage: React.FC = () => {
       })
 
       if (tpls.length > 0) {
-        setTemplateDisparoId(tpls[0].id)
         setMensagemCustomizadaDisparo(tpls[0].mensagem)
       } else {
-        setTemplateDisparoId('')
         const obj = objetos.find(o => o.id === objetoDisparo)
         setMensagemCustomizadaDisparo(`Olá, {{primeiro_nome}}! Sua opinião sobre a ${obj?.nome || 'nossa corrida'} é fundamental. Responda no link oficial: {{link}}`)
       }
     }
   }, [objetoDisparo, pesquisaDisparoId, templates])
+
+  // Carrega campanhas da pesquisa/objeto
+  const carregarCampanhas = async (pesqId?: string, objId?: string) => {
+    setCarregandoCampanhas(true)
+    try {
+      const data = await dbService.getCampanhas(pesqId || undefined, objId || undefined)
+      setCampanhas(data)
+    } catch (err) {
+      console.error('Erro ao carregar campanhas:', err)
+    } finally {
+      setCarregandoCampanhas(false)
+    }
+  }
+
+  // Configura Webhook da Z-API com a URL da Edge Function Supabase
+  const handleConfigurarWebhookAutomatico = async () => {
+    if (!configZApi || !ZApiService.isConfigValida(configZApi)) {
+      alert('Preencha e salve suas credenciais da Z-API antes de configurar o webhook.')
+      return
+    }
+
+    setWebhookConfigurando(true)
+    setWebhookFeedback(null)
+    const webhookUrl = 'https://jvthahyjloffkoiroejy.supabase.co/functions/v1/zapi-webhook'
+
+    try {
+      const res = await ZApiService.configurarWebhookMessageStatus(configZApi, webhookUrl)
+      if (res.sucesso) {
+        setWebhookFeedback({
+          sucesso: true,
+          msg: 'Webhook ativado na Z-API com sucesso! As mensagens agora serão atualizadas em tempo real para Entregue e Lido (Check Azul).'
+        })
+      } else {
+        setWebhookFeedback({
+          sucesso: false,
+          msg: res.erro || 'Falha ao ativar webhook na Z-API.'
+        })
+      }
+    } catch (err: any) {
+      setWebhookFeedback({
+        sucesso: false,
+        msg: err.message || 'Erro ao conectar webhook.'
+      })
+    } finally {
+      setWebhookConfigurando(false)
+    }
+  }
+
+  const handleAbrirCockpit = async (camp: CampanhaDisparo) => {
+    setCampanhaAtiva(camp)
+    try {
+      const logs = await dbService.getLogsCampanha(camp.id)
+      setLogsCampanhaAtiva(logs)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleVoltarListaCampanhas = () => {
+    setCampanhaAtiva(null)
+    setLogsCampanhaAtiva([])
+    carregarCampanhas(pesquisaDisparoId, objetoDisparo)
+  }
+
+  const handleAbrirModalNovaCampanha = (preFiltro?: 'todos' | 'pendentes' | 'nao_lidos') => {
+    const qtdCampanhas = campanhas.length
+    const numOnda = qtdCampanhas + 1
+    const sugerido = numOnda === 1 
+      ? '1ª Onda: Convite Geral Pós-Prova' 
+      : `${numOnda}ª Onda: Lembrete Retardatários`
+    
+    setNomeNovaCampanha(sugerido)
+    setFiltroPublicoNovaCampanha(preFiltro || (numOnda === 1 ? 'todos' : 'pendentes'))
+    setPesquisaNovaCampanhaId(pesquisaDisparoId || pesquisasDoObjetoDisparo[0]?.id || '')
+
+    const obj = objetos.find(o => o.id === objetoDisparo)
+    const tplPadrao = templates.find(t => t.objeto_id === objetoDisparo)
+    const txtPadrao = tplPadrao?.mensagem || `Olá, {{primeiro_nome}}! Sua opinião sobre a ${obj?.nome || 'nossa corrida'} é fundamental. Responda no link oficial: {{link}}`
+    setMensagemNovaCampanha(txtPadrao)
+
+    setModalNovaCampanhaOpen(true)
+  }
+
+  const handleSalvarNovaCampanha = async (iniciarDisparo: boolean = false) => {
+    if (!nomeNovaCampanha.trim()) {
+      alert('Informe o nome da campanha.')
+      return
+    }
+    if (!pesquisaNovaCampanhaId) {
+      alert('Selecione a pesquisa vinculada.')
+      return
+    }
+    if (!mensagemNovaCampanha.trim()) {
+      alert('Escreva o texto da mensagem.')
+      return
+    }
+
+    setSalvandoCampanha(true)
+    try {
+      let destCount = participantesDisparo.length
+      if (filtroPublicoNovaCampanha === 'pendentes') {
+        destCount = participantesDisparo.filter(p => !p.respondeu).length
+      } else if (filtroPublicoNovaCampanha === 'nao_lidos') {
+        destCount = participantesDisparo.filter(p => !p.respondeu && p.status_whatsapp !== 'lido').length
+      }
+
+      const nova = await dbService.saveCampanha({
+        objeto_id: objetoDisparo,
+        pesquisa_id: pesquisaNovaCampanhaId,
+        nome: nomeNovaCampanha.trim(),
+        mensagem_texto: mensagemNovaCampanha,
+        filtro_publico: filtroPublicoNovaCampanha,
+        status: iniciarDisparo ? 'enviando' : 'rascunho',
+        total_destinatarios: destCount,
+        enviados_count: 0,
+        entregues_count: 0,
+        lidos_count: 0,
+        respondidos_count: 0,
+        disparado_em: iniciarDisparo ? new Date().toISOString() : null
+      })
+
+      setModalNovaCampanhaOpen(false)
+      await carregarCampanhas(pesquisaDisparoId, objetoDisparo)
+      await handleAbrirCockpit(nova)
+
+      if (iniciarDisparo) {
+        setTimeout(() => {
+          handleIniciarDisparoCampanha(nova)
+        }, 300)
+      }
+    } catch (err: any) {
+      alert('Erro ao salvar campanha: ' + err.message)
+    } finally {
+      setSalvandoCampanha(false)
+    }
+  }
+
+  const handleExcluirCampanha = async (id: string, nome: string) => {
+    if (!confirm(`Deseja realmente excluir a campanha "${nome}"?\n\nO histórico de mensagens desta campanha continuará no banco de dados, mas a campanha será removida da lista.`)) {
+      return
+    }
+    try {
+      await dbService.deleteCampanha(id)
+      if (campanhaAtiva?.id === id) {
+        setCampanhaAtiva(null)
+      }
+      await carregarCampanhas(pesquisaDisparoId, objetoDisparo)
+    } catch (e: any) {
+      alert('Erro ao excluir campanha: ' + e.message)
+    }
+  }
+
+  const handleAbrirTimelineAtleta = async (p: ParticipanteComStatus) => {
+    setAtletaTimeline(p)
+    setModalTimelineOpen(true)
+    setCarregandoTimeline(true)
+    try {
+      const hist = await dbService.getHistoricoParticipante(p.id, objetoDisparo)
+      setHistoricoTimeline(hist)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCarregandoTimeline(false)
+    }
+  }
 
   const carregarParticipantesDoObjeto = async (objId: string, pesqId?: string) => {
     setCarregandoParticipantes(true)
@@ -422,13 +618,6 @@ export const WhatsAppPage: React.FC = () => {
     }
   }
 
-  const handleTrocaTemplateDisparo = (tplId: string) => {
-    setTemplateDisparoId(tplId)
-    const t = templates.find(item => item.id === tplId)
-    if (t) {
-      setMensagemCustomizadaDisparo(t.mensagem)
-    }
-  }
 
   // Link exato da pesquisa selecionada
   const linkPesquisaDisparoAtiva = useMemo(() => {
@@ -438,6 +627,87 @@ export const WhatsAppPage: React.FC = () => {
     }
     return getLinkPorPesquisa(null, objetoDisparo)
   }, [pesquisaDisparoId, objetoDisparo, pesquisas])
+
+  // Atletas e Métricas da Campanha Ativa
+  const participantesCampanhaAtiva = useMemo(() => {
+    if (!campanhaAtiva) return []
+    const logMap = new Map<string, DisparoLog>()
+    logsCampanhaAtiva.forEach(l => {
+      if (l.participante_id) logMap.set(l.participante_id, l)
+    })
+
+    let base = participantesDisparo
+    if (campanhaAtiva.filtro_publico === 'pendentes') {
+      base = participantesDisparo.filter(p => logMap.has(p.id) || !p.respondeu)
+    } else if (campanhaAtiva.filtro_publico === 'nao_lidos') {
+      base = participantesDisparo.filter(p => {
+        const log = logMap.get(p.id)
+        return logMap.has(p.id) || (!p.respondeu && log?.status !== 'lido')
+      })
+    }
+
+    return base.map(p => {
+      const log = logMap.get(p.id)
+      let estado: 'respondido' | 'lido' | 'entregue' | 'enviado' | 'pendente' = 'pendente'
+      if (p.respondeu) {
+        estado = 'respondido'
+      } else if (log) {
+        estado = log.status as any
+      }
+
+      return {
+        ...p,
+        status_campanha: estado,
+        lido_em: log?.lido_em || null,
+        entregue_em: log?.entregue_em || null,
+        enviado_em: log?.created_at || null
+      }
+    })
+  }, [campanhaAtiva, logsCampanhaAtiva, participantesDisparo])
+
+  const estatisticasCampanhaAtiva = useMemo(() => {
+    if (!campanhaAtiva) {
+      return { total: 0, enviados: 0, entregues: 0, lidos: 0, respondidos: 0, pctEntregues: 0, pctLidos: 0, pctResp: 0, aptos: 0 }
+    }
+    const total = participantesCampanhaAtiva.length || campanhaAtiva.total_destinatarios || 0
+    const enviados = logsCampanhaAtiva.filter(l => l.status !== 'erro').length
+    const entregues = logsCampanhaAtiva.filter(l => l.status === 'entregue' || l.status === 'lido').length
+    const lidos = logsCampanhaAtiva.filter(l => l.status === 'lido').length
+    const respondidos = participantesCampanhaAtiva.filter(p => p.respondeu).length
+
+    const jaNotificadosIds = new Set(logsCampanhaAtiva.map(l => l.participante_id))
+    const aptos = participantesCampanhaAtiva.filter(p => !p.respondeu && !jaNotificadosIds.has(p.id) && p.telefone && p.telefone.replace(/\D/g, '').length >= 10).length
+
+    const pctEntregues = enviados > 0 ? Math.round((entregues / enviados) * 100) : 0
+    const pctLidos = entregues > 0 ? Math.round((lidos / entregues) * 100) : 0
+    const pctResp = total > 0 ? Math.round((respondidos / total) * 100) : 0
+
+    return { total, enviados, entregues, lidos, respondidos, pctEntregues, pctLidos, pctResp, aptos }
+  }, [campanhaAtiva, logsCampanhaAtiva, participantesCampanhaAtiva])
+
+  const participantesFiltradosCockpit = useMemo(() => {
+    return participantesCampanhaAtiva.filter(p => {
+      const matchBusca = !buscaCockpit || 
+        p.nome.toLowerCase().includes(buscaCockpit.toLowerCase()) || 
+        (p.telefone && p.telefone.includes(buscaCockpit))
+      
+      const st = (p as any).status_campanha
+      let matchStatus = true
+      if (filtroStatusCockpit === 'respondido') {
+        matchStatus = p.respondeu
+      } else if (filtroStatusCockpit !== 'todos') {
+        matchStatus = st === filtroStatusCockpit
+      }
+
+      return matchBusca && matchStatus
+    })
+  }, [participantesCampanhaAtiva, buscaCockpit, filtroStatusCockpit])
+
+  const handleIniciarDisparoCampanha = async (camp: CampanhaDisparo) => {
+    setCampanhaAtiva(camp)
+    setMensagemCustomizadaDisparo(camp.mensagem_texto)
+    await handleIniciarDisparoEmLote()
+  }
 
   const estatisticasDisparo = useMemo(() => {
     const total = participantesDisparo.length
@@ -535,15 +805,24 @@ export const WhatsAppPage: React.FC = () => {
       }
     }
 
-    if (estatisticasDisparo.aptos === 0) {
-      alert('Nenhum participante pendente com telefone válido encontrado para esta pesquisa.')
+    let listaAptos: ParticipanteComStatus[] = []
+    if (campanhaAtiva) {
+      const jaNotificadosIds = new Set(logsCampanhaAtiva.map(l => l.participante_id))
+      listaAptos = participantesCampanhaAtiva.filter(p => !p.respondeu && !jaNotificadosIds.has(p.id) && p.telefone && p.telefone.replace(/\D/g, '').length >= 10)
+    } else {
+      listaAptos = estatisticasDisparo.listaAptos
+    }
+
+    if (listaAptos.length === 0) {
+      alert('Nenhum participante apto para envio (pendente e com telefone válido) encontrado nesta seleção.')
       return
     }
 
     const obj = objetos.find(o => o.id === objetoDisparo)
     const pesq = pesquisas.find(p => p.id === pesquisaDisparoId)
+    const alvoDesc = campanhaAtiva ? `campanha "${campanhaAtiva.nome}"` : `pesquisa "${pesq?.titulo || obj?.nome}"`
 
-    if (!confirm(`Confirmar disparo para ${estatisticasDisparo.aptos} participantes pendentes da pesquisa "${pesq?.titulo || obj?.nome}"?\n\nLink que será enviado: ${linkPesquisaDisparoAtiva}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
+    if (!confirm(`Confirmar disparo para ${listaAptos.length} participantes da ${alvoDesc}?\n\nLink que será enviado: ${linkPesquisaDisparoAtiva}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
       return
     }
 
@@ -551,13 +830,13 @@ export const WhatsAppPage: React.FC = () => {
     setEmLoteProcessando(true)
     setModalLoteOpen(true)
     setProgressoLote({
-      total: estatisticasDisparo.aptos,
+      total: listaAptos.length,
       atual: 0,
       enviados: 0,
       erros: 0
     })
 
-    const lista = [...estatisticasDisparo.listaAptos]
+    const lista = [...listaAptos]
 
     for (let i = 0; i < lista.length; i++) {
       if (cancelarLote) {
@@ -565,8 +844,9 @@ export const WhatsAppPage: React.FC = () => {
       }
 
       const p = lista[i]
+      const msgTexto = campanhaAtiva?.mensagem_texto || mensagemCustomizadaDisparo
       const msg = ZApiService.personalizarMensagem(
-        mensagemCustomizadaDisparo,
+        msgTexto,
         p,
         linkPesquisaDisparoAtiva,
         obj?.nome || 'Corrida'
@@ -581,6 +861,7 @@ export const WhatsAppPage: React.FC = () => {
             objetoId: objetoDisparo,
             telefone: p.telefone!,
             status: 'enviado',
+            campanhaId: campanhaAtiva?.id,
             messageId: res.messageId,
             zaapId: res.zaapId
           })
@@ -593,6 +874,7 @@ export const WhatsAppPage: React.FC = () => {
             objetoId: objetoDisparo,
             telefone: p.telefone!,
             status: 'erro',
+            campanhaId: campanhaAtiva?.id,
             erro: res.erro || 'Falha no envio Z-API'
           })
         }
@@ -610,6 +892,7 @@ export const WhatsAppPage: React.FC = () => {
           objetoId: objetoDisparo,
           telefone: p.telefone!,
           status: 'erro',
+          campanhaId: campanhaAtiva?.id,
           erro: err?.message || 'Exceção ao disparar'
         }).catch(() => {})
 
@@ -627,6 +910,16 @@ export const WhatsAppPage: React.FC = () => {
     }
 
     setEmLoteProcessando(false)
+    if (campanhaAtiva) {
+      await dbService.saveCampanha({
+        id: campanhaAtiva.id,
+        status: 'concluido',
+        disparado_em: new Date().toISOString()
+      })
+      const logsAtualizados = await dbService.getLogsCampanha(campanhaAtiva.id)
+      setLogsCampanhaAtiva(logsAtualizados)
+      await carregarCampanhas(pesquisaDisparoId, objetoDisparo)
+    }
     if (objetoDisparo) {
       await carregarParticipantesDoObjeto(objetoDisparo, pesquisaDisparoId)
     }
@@ -937,6 +1230,43 @@ export const WhatsAppPage: React.FC = () => {
                 </button>
               </div>
             </form>
+
+            {/* Card de Configuração de Webhook Z-API */}
+            <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black uppercase text-foreground tracking-wider flex items-center gap-1.5">
+                    <CheckCheck className="h-4 w-4 text-blue-600" />
+                    Webhook de Status em Tempo Real (Z-API)
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Receba notificações automáticas de <strong>Entregue</strong> e <strong>Lido (Check Azul)</strong> diretamente no banco.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1 border-t border-border/60">
+                <span className="font-mono text-[10px] text-muted-foreground break-all max-w-sm">
+                  https://jvthahyjloffkoiroejy.supabase.co/functions/v1/zapi-webhook
+                </span>
+                <button
+                  type="button"
+                  onClick={handleConfigurarWebhookAutomatico}
+                  disabled={webhookConfigurando}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                >
+                  <RefreshCw className={`h-3 w-3 ${webhookConfigurando ? 'animate-spin' : ''}`} />
+                  {webhookConfigurando ? 'Ativando...' : 'Ativar Webhook na Z-API'}
+                </button>
+              </div>
+
+              {webhookFeedback && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${webhookFeedback.sucesso ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-destructive/10 text-destructive border border-destructive/20'}`}>
+                  {webhookFeedback.sucesso ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+                  <span>{webhookFeedback.msg}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1095,7 +1425,6 @@ export const WhatsAppPage: React.FC = () => {
                           if (tpl.pesquisa_id) {
                             setPesquisaDisparoId(tpl.pesquisa_id)
                           }
-                          setTemplateDisparoId(tpl.id)
                           setMensagemCustomizadaDisparo(tpl.mensagem)
                           setTabAtiva('disparos')
                         }}
@@ -1113,24 +1442,34 @@ export const WhatsAppPage: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* ABA 3: CENTRAL DE DISPAROS POR PROJETO E PESQUISA */}
+      {/* ABA 3: CENTRAL DE CAMPANHAS & DISPAROS */}
       {/* ============================================================ */}
       {tabAtiva === 'disparos' && (
         <div className="space-y-8">
-          {/* Card de Configuração do Disparo */}
-          <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-border pb-3 flex items-center justify-between">
+          {/* Barra Superior: Projeto e Pesquisa + Botão Nova Campanha */}
+          <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
               <div>
-                <h3 className="text-lg font-black text-foreground">
-                  Configurar Disparo em Massa
+                <h3 className="text-lg font-black text-foreground flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  Central de Campanhas & Disparos
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Selecione o projeto, a pesquisa desejada e o modelo de mensagem com link automático.
+                  Gerencie ondas de envio com rastreamento de entrega, leitura no WhatsApp e conversão em respostas.
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleAbrirModalNovaCampanha()}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary text-primary-foreground text-xs font-black shadow-md hover:bg-primary/90 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                Nova Onda / Campanha
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
               {/* 1. Seleção do Projeto */}
               <div className="space-y-1.5">
                 <label className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -1139,7 +1478,15 @@ export const WhatsAppPage: React.FC = () => {
                 </label>
                 <select
                   value={objetoDisparo}
-                  onChange={e => setObjetoDisparo(e.target.value)}
+                  onChange={e => {
+                    const newObj = e.target.value
+                    setObjetoDisparo(newObj)
+                    const pesqs = pesquisas.filter(p => p.objeto_id === newObj)
+                    const pId = pesqs[0]?.id || ''
+                    setPesquisaDisparoId(pId)
+                    carregarParticipantesDoObjeto(newObj, pId)
+                    carregarCampanhas(pId, newObj)
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                 >
                   {objetos.map(obj => (
@@ -1156,7 +1503,12 @@ export const WhatsAppPage: React.FC = () => {
                 </label>
                 <select
                   value={pesquisaDisparoId}
-                  onChange={e => setPesquisaDisparoId(e.target.value)}
+                  onChange={e => {
+                    const pId = e.target.value
+                    setPesquisaDisparoId(pId)
+                    carregarParticipantesDoObjeto(objetoDisparo, pId)
+                    carregarCampanhas(pId, objetoDisparo)
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                 >
                   {pesquisasDoObjetoDisparo.length === 0 ? (
@@ -1170,199 +1522,501 @@ export const WhatsAppPage: React.FC = () => {
                   )}
                 </select>
               </div>
-
-              {/* 3. Seleção da Mensagem */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                  3. Modelo de Mensagem:
-                </label>
-                <select
-                  value={templateDisparoId}
-                  onChange={e => handleTrocaTemplateDisparo(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                >
-                  {templates.filter(t => t.objeto_id === objetoDisparo).length === 0 && (
-                    <option value="">Mensagem Padrão do Sistema</option>
-                  )}
-                  {templates
-                    .filter(t => t.objeto_id === objetoDisparo && (!t.pesquisa_id || t.pesquisa_id === pesquisaDisparoId))
-                    .map(tpl => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.titulo} {tpl.pesquisa_token ? `(${tpl.pesquisa_token})` : ''}
-                      </option>
-                    ))}
-                </select>
-              </div>
             </div>
+          </div>
 
-            {/* Destaque do Link da Pesquisa Selecionada */}
-            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block">
-                  Link Oficial que será disparado via tag &#123;&#123;link&#125;&#125;:
-                </span>
-                <span className="font-mono text-sm font-black text-foreground break-all">
-                  {linkPesquisaDisparoAtiva}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={copiarLinkAtivo}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-foreground transition-colors cursor-pointer"
-                >
-                  {copiadoLink ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copiadoLink ? 'Copiado!' : 'Copiar'}
-                </button>
-                <a
-                  href={linkPesquisaDisparoAtiva}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:bg-primary/90 transition-colors"
-                >
-                  Abrir <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            </div>
-
-            {/* Editor de Texto da Mensagem */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
-                Conteúdo da Mensagem para este Envio:
-              </label>
-              <textarea
-                value={mensagemCustomizadaDisparo}
-                onChange={e => setMensagemCustomizadaDisparo(e.target.value)}
-                rows={4}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 leading-relaxed font-sans"
-              />
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <span className="text-[11px] text-muted-foreground self-center mr-1">Tags permitidas:</span>
-                {['{{primeiro_nome}}', '{{nome}}', '{{corrida}}', '{{link}}', '{{distancia}}', '{{peito}}'].map(tag => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setMensagemCustomizadaDisparo(prev => prev + ' ' + tag)}
-                    className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-[10px] font-mono text-foreground border border-border cursor-pointer transition-colors"
-                  >
-                    + {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Painel de Métricas da Pesquisa Selecionada */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-muted/40 border border-border">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase text-muted-foreground tracking-wider">Total Atletas</p>
-                <p className="text-xl font-black text-foreground">{carregandoParticipantes ? '...' : estatisticasDisparo.total}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Já Responderam</p>
-                <p className="text-xl font-black text-emerald-600">{carregandoParticipantes ? '...' : estatisticasDisparo.respondidos}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-extrabold uppercase text-blue-500 tracking-wider">Mensagens Enviadas</p>
-                <p className="text-xl font-black text-blue-500">{carregandoParticipantes ? '...' : estatisticasDisparo.jaNotificados}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-extrabold uppercase text-primary tracking-wider">Restantes para Envio</p>
-                <p className="text-xl font-black text-primary">{carregandoParticipantes ? '...' : estatisticasDisparo.aptos}</p>
-              </div>
-            </div>
-
-            {/* Banner de Proteção contra Interrupção & Botão de Reset */}
-            {estatisticasDisparo.jaNotificados > 0 && (
-              <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-foreground block">
-                      Proteção contra Interrupção e Retomada Automática Ativa:
+          {!campanhaAtiva ? (
+            /* ============================================================ */
+            /* VISÃO MACRO: LISTA DE CAMPANHAS (ONDAS) */
+            /* ============================================================ */
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-base font-black text-foreground flex items-center gap-2">
+                    Ondas de Disparo Cadastradas
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                      {campanhas.length}
                     </span>
-                    <span className="text-muted-foreground">
-                      <strong>{estatisticasDisparo.jaNotificados} atleta(s)</strong> já receberam notificação no WhatsApp para esta pesquisa e não receberão mensagem duplicada. Se o envio parou no meio por qualquer motivo, ao clicar em "Retomar Disparo", o sistema continuará apenas com os <strong>{estatisticasDisparo.aptos} atleta(s) restantes</strong>.
-                    </span>
-                  </div>
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Cada onda isola seu histórico de entrega, leitura e conversão.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleLimparLogs}
-                  disabled={limpandoLogs}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-muted-foreground hover:text-foreground shrink-0 transition-colors cursor-pointer"
-                  title="Limpar o registro de envio para permitir reenviar a todos os pendentes"
-                >
-                  <RotateCcw className={`h-3.5 w-3.5 ${limpandoLogs ? 'animate-spin' : ''}`} />
-                  {limpandoLogs ? 'Reiniciando...' : 'Reiniciar Envios (Zerar Histórico)'}
-                </button>
               </div>
-            )}
 
-            {/* Preview Real do Balão WhatsApp */}
-            <div className="space-y-2">
-              <label className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider block">
-                Visualização Real (Como o Atleta Nº 1 vai receber):
-              </label>
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-sm text-foreground leading-relaxed whitespace-pre-wrap font-sans max-w-2xl">
-                {previewMensagemReal}
-              </div>
-            </div>
+              {carregandoCampanhas ? (
+                <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
+                  <Clock className="h-5 w-5 animate-spin text-primary" />
+                  Carregando campanhas...
+                </div>
+              ) : campanhas.length === 0 ? (
+                <div className="p-12 text-center border border-dashed border-border rounded-3xl bg-muted/10 space-y-4">
+                  <div className="inline-flex p-4 rounded-3xl bg-primary/10 text-primary">
+                    <Layers className="h-8 w-8" />
+                  </div>
+                  <div className="max-w-md mx-auto space-y-1">
+                    <h5 className="text-base font-black text-foreground">
+                      Nenhuma campanha criada para esta pesquisa
+                    </h5>
+                    <p className="text-xs text-muted-foreground">
+                      Crie sua 1ª Onda de Disparo para enviar convites aos participantes e acompanhar as taxas de entrega, leitura no WhatsApp e respostas.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirModalNovaCampanha()}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-primary text-primary-foreground text-xs font-black shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Criar 1ª Campanha de Disparo
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {campanhas.map(camp => {
+                    const pctResp = camp.total_destinatarios && camp.total_destinatarios > 0 
+                      ? Math.round((camp.respondidos_count / camp.total_destinatarios) * 100) 
+                      : 0
 
-            {/* Teste Individual Rápido */}
-            <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
-              <h4 className="text-xs font-extrabold uppercase text-foreground tracking-wider flex items-center gap-1.5">
-                <Smartphone className="h-3.5 w-3.5 text-primary" />
-                Enviar Mensagem de Teste para o Seu WhatsApp:
-              </h4>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <input
-                  type="text"
-                  value={telefoneTeste}
-                  onChange={e => setTelefoneTeste(e.target.value)}
-                  placeholder="Ex: 81999998888 (com DDD)"
-                  className="w-full sm:w-64 px-3.5 py-2 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  type="button"
-                  onClick={handleEnviarTeste}
-                  disabled={enviandoTeste}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-border bg-muted hover:bg-muted/80 text-xs font-bold text-foreground transition-all cursor-pointer"
-                >
-                  <Send className={`h-3.5 w-3.5 ${enviandoTeste ? 'animate-spin' : ''}`} />
-                  {enviandoTeste ? 'Enviando...' : 'Testar no Meu WhatsApp'}
-                </button>
-              </div>
-              {feedbackTeste && (
-                <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${feedbackTeste.sucesso ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-destructive/10 text-destructive border border-destructive/20'}`}>
-                  {feedbackTeste.sucesso ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                  {feedbackTeste.msg}
+                    return (
+                      <div 
+                        key={camp.id}
+                        className="bg-card border border-border hover:border-primary/40 rounded-3xl p-5 shadow-xs transition-all space-y-4 flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider ${
+                              camp.status === 'concluido'
+                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                : camp.status === 'enviando'
+                                ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20 animate-pulse'
+                                : 'bg-muted text-muted-foreground border border-border'
+                            }`}>
+                              {camp.status === 'concluido' && <CheckCheck className="h-3 w-3 text-emerald-500" />}
+                              {camp.status === 'enviando' && <Clock className="h-3 w-3 animate-spin text-blue-500" />}
+                              {camp.status === 'rascunho' && <Clock className="h-3 w-3 text-muted-foreground" />}
+                              {camp.status === 'concluido' ? 'Concluída' : camp.status === 'enviando' ? 'Enviando...' : 'Rascunho'}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleExcluirCampanha(camp.id, camp.nome)
+                              }}
+                              title="Excluir campanha"
+                              className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          <div>
+                            <h5 className="text-base font-black text-foreground line-clamp-1">
+                              {camp.nome}
+                            </h5>
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              {camp.filtro_publico === 'pendentes' 
+                                ? 'Público: Apenas Pendentes (Não responderam)' 
+                                : camp.filtro_publico === 'nao_lidos'
+                                ? 'Público: Apenas Não Lidos no WhatsApp'
+                                : 'Público: Todos os Atletas'}
+                            </span>
+                          </div>
+
+                          {/* Mini Métricas do Funil */}
+                          <div className="grid grid-cols-4 gap-2 pt-1 border-t border-border/60 text-center">
+                            <div className="p-2 rounded-xl bg-muted/40">
+                              <span className="text-[9px] font-bold text-muted-foreground block uppercase">Env.</span>
+                              <span className="text-xs font-black text-foreground">{camp.enviados_count || 0}</span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-muted/40">
+                              <span className="text-[9px] font-bold text-muted-foreground block uppercase">Entr.</span>
+                              <span className="text-xs font-black text-foreground">{camp.entregues_count || 0}</span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                              <span className="text-[9px] font-bold text-blue-600 block uppercase">Lidos</span>
+                              <span className="text-xs font-black text-blue-600">{camp.lidos_count || 0}</span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                              <span className="text-[9px] font-bold text-emerald-600 block uppercase">Resp.</span>
+                              <span className="text-xs font-black text-emerald-600">{camp.respondidos_count || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Barra de Conversão */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                              <span>Taxa de Resposta</span>
+                              <span className="text-emerald-600 font-black">{pctResp}%</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div 
+                                className="h-full bg-emerald-500 rounded-full transition-all"
+                                style={{ width: `${Math.min(pctResp, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-border flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">
+                            {camp.disparado_em 
+                              ? `Disparada em ${new Date(camp.disparado_em).toLocaleDateString('pt-BR')}` 
+                              : `Criada em ${new Date(camp.created_at).toLocaleDateString('pt-BR')}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirCockpit(camp)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:bg-primary/90 transition-all cursor-pointer"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            Abrir Painel
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
+          ) : (
+            /* ============================================================ */
+            /* VISÃO MICRO: COCKPIT DA CAMPANHA ATIVA */
+            /* ============================================================ */
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Barra de Navegação do Cockpit */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-card border border-border shadow-xs">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleVoltarListaCampanhas}
+                    className="p-2 rounded-xl border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title="Voltar para lista de campanhas"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-lg font-black text-foreground">
+                        {campanhaAtiva.nome}
+                      </h4>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                        campanhaAtiva.status === 'concluido'
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          : campanhaAtiva.status === 'enviando'
+                          ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20 animate-pulse'
+                          : 'bg-muted text-muted-foreground border border-border'
+                      }`}>
+                        {campanhaAtiva.status === 'concluido' ? 'Concluída' : campanhaAtiva.status === 'enviando' ? 'Enviando...' : 'Rascunho'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {campanhaAtiva.filtro_publico === 'pendentes' 
+                        ? 'Público-alvo: Atletas Pendentes (que ainda não responderam)' 
+                        : campanhaAtiva.filtro_publico === 'nao_lidos'
+                        ? 'Público-alvo: Atletas que não leram no WhatsApp'
+                        : 'Público-alvo: Todos os Atletas cadastrados'}
+                    </p>
+                  </div>
+                </div>
 
-            {/* Botão de Disparo em Massa */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border">
-              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
-                <span>
-                  Proteção Anti-Bloqueio: <strong>6 segundos</strong> de intervalo automático entre cada mensagem.
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirCockpit(campanhaAtiva)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-colors cursor-pointer"
+                    title="Atualizar métricas da campanha"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Atualizar Status
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLimparLogs}
+                    disabled={limpandoLogs}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title="Reiniciar histórico de disparos da pesquisa"
+                  >
+                    <RotateCcw className={`h-3.5 w-3.5 ${limpandoLogs ? 'animate-spin' : ''}`} />
+                    {limpandoLogs ? 'Limpando...' : 'Zerar Histórico'}
+                  </button>
+                  {estatisticasCampanhaAtiva.aptos > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => handleIniciarDisparoCampanha(campanhaAtiva)}
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md transition-all cursor-pointer"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      {estatisticasCampanhaAtiva.enviados > 0 
+                        ? `Retomar Disparo (${estatisticasCampanhaAtiva.aptos} Restantes)`
+                        : `Iniciar Disparo (${estatisticasCampanhaAtiva.aptos} Atletas)`}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleIniciarDisparoCampanha(campanhaAtiva)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-muted hover:bg-muted/80 text-foreground text-xs font-bold transition-all cursor-pointer"
+                      title="Disparar novamente para atletas aptos"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reenviar Mensagem
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleIniciarDisparoEmLote}
-                disabled={estatisticasDisparo.aptos === 0}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-sm shadow-lg transition-all cursor-pointer"
-              >
-                <Send className="h-4 w-4" />
-                {estatisticasDisparo.jaNotificados > 0 
-                  ? `Retomar Disparo (${estatisticasDisparo.aptos} Restantes)`
-                  : `Iniciar Disparo em Massa (${estatisticasDisparo.aptos} Atletas)`}
-              </button>
+              {/* Funil Visual de 4 Etapas */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* 1. Enviadas */}
+                <div className="p-5 rounded-3xl bg-card border border-border shadow-xs space-y-1">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider">1. Enviadas</span>
+                    <Send className="h-4 w-4" />
+                  </div>
+                  <div className="text-2xl font-black text-foreground">
+                    {estatisticasCampanhaAtiva.enviados}
+                    <span className="text-xs font-bold text-muted-foreground ml-1.5">/ {estatisticasCampanhaAtiva.total}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Disparadas via Z-API</p>
+                </div>
+
+                {/* 2. Entregues */}
+                <div className="p-5 rounded-3xl bg-card border border-border shadow-xs space-y-1">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider">2. Entregues</span>
+                    <CheckCheck className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="text-2xl font-black text-foreground">
+                    {estatisticasCampanhaAtiva.entregues}
+                    <span className="text-xs font-bold text-muted-foreground ml-1.5">({estatisticasCampanhaAtiva.pctEntregues}%)</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Aparelho recebeu mensagem</p>
+                </div>
+
+                {/* 3. Lidas no WhatsApp */}
+                <div className="p-5 rounded-3xl bg-blue-500/10 border border-blue-500/20 shadow-xs space-y-1">
+                  <div className="flex items-center justify-between text-blue-600">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider">3. Lidas no Zap</span>
+                    <CheckCheck className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="text-2xl font-black text-blue-600">
+                    {estatisticasCampanhaAtiva.lidos}
+                    <span className="text-xs font-bold text-blue-600/70 ml-1.5">({estatisticasCampanhaAtiva.pctLidos}%)</span>
+                  </div>
+                  <p className="text-[10px] text-blue-600/70">Duplo check azul confirmado</p>
+                </div>
+
+                {/* 4. Respostas Coletadas */}
+                <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 shadow-xs space-y-1">
+                  <div className="flex items-center justify-between text-emerald-600">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider">4. Respostas</span>
+                    <ClipboardList className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-black text-emerald-600">
+                    {estatisticasCampanhaAtiva.respondidos}
+                    <span className="text-xs font-bold text-emerald-600/70 ml-1.5">({estatisticasCampanhaAtiva.pctResp}%)</span>
+                  </div>
+                  <p className="text-[10px] text-emerald-600/70">Pesquisa preenchida</p>
+                </div>
+              </div>
+
+              {/* Caixa de Mensagem e Link desta Campanha + Teste Rápido */}
+              <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+                  <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                    Mensagem Transmitida nesta Onda:
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={copiarLinkAtivo}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted text-[11px] font-bold text-foreground cursor-pointer"
+                    >
+                      {copiadoLink ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                      {copiadoLink ? 'Copiado!' : 'Copiar Link'}
+                    </button>
+                    <a
+                      href={linkPesquisaDisparoAtiva}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold hover:bg-primary/90"
+                    >
+                      Abrir Link <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-muted/40 border border-border text-xs text-foreground leading-relaxed whitespace-pre-wrap font-sans">
+                  {campanhaAtiva.mensagem_texto}
+                </div>
+
+                {/* Teste Individual para Meu WhatsApp */}
+                <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                  <input
+                    type="text"
+                    value={telefoneTeste}
+                    onChange={e => setTelefoneTeste(e.target.value)}
+                    placeholder="Testar no meu zap (ex: 81999998888)"
+                    className="w-full sm:w-64 px-3.5 py-2 rounded-xl border border-border bg-background text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleEnviarTeste}
+                    disabled={enviandoTeste}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-border bg-muted hover:bg-muted/80 text-xs font-bold text-foreground transition-all cursor-pointer"
+                  >
+                    <Send className={`h-3 w-3 ${enviandoTeste ? 'animate-spin' : ''}`} />
+                    {enviandoTeste ? 'Enviando...' : 'Testar Mensagem no Meu WhatsApp'}
+                  </button>
+                  {feedbackTeste && (
+                    <span className={`text-xs font-bold ${feedbackTeste.sucesso ? 'text-emerald-600' : 'text-destructive'}`}>
+                      {feedbackTeste.msg}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Tabela de Destinatários Desta Campanha */}
+              <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-base font-black text-foreground">
+                      Destinatários Desta Campanha
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Acompanhe o status individual de envio, leitura e resposta na pesquisa.
+                    </p>
+                  </div>
+
+                  {/* Filtro por Status e Busca */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={buscaCockpit}
+                        onChange={e => setBuscaCockpit(e.target.value)}
+                        placeholder="Buscar atleta ou fone..."
+                        className="pl-8 pr-3 py-1.5 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+
+                    <select
+                      value={filtroStatusCockpit}
+                      onChange={e => setFiltroStatusCockpit(e.target.value as any)}
+                      className="px-3 py-1.5 rounded-xl border border-border bg-background text-xs font-bold text-foreground cursor-pointer"
+                    >
+                      <option value="todos">Todos ({participantesCampanhaAtiva.length})</option>
+                      <option value="lido">Lido no Zap</option>
+                      <option value="entregue">Entregue</option>
+                      <option value="enviado">Enviado</option>
+                      <option value="respondido">Já Respondeu</option>
+                      <option value="pendente">Pendente de Envio</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border border-border rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-muted/60 border-b border-border text-muted-foreground font-extrabold uppercase text-[10px] tracking-wider">
+                          <th className="p-3.5">Atleta</th>
+                          <th className="p-3.5">Telefone</th>
+                          <th className="p-3.5">WhatsApp</th>
+                          <th className="p-3.5">Pesquisa</th>
+                          <th className="p-3.5 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {carregandoParticipantes ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                              <Clock className="h-4 w-4 animate-spin inline-block mr-2 text-primary" />
+                              Carregando atletas da pesquisa...
+                            </td>
+                          </tr>
+                        ) : participantesFiltradosCockpit.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                              Nenhum atleta encontrado com este filtro.
+                            </td>
+                          </tr>
+                        ) : (
+                          participantesFiltradosCockpit.map(p => {
+                            const st = (p as any).status_campanha
+
+                            return (
+                              <tr key={p.id} className="hover:bg-muted/30 transition-colors">
+                                <td className="p-3.5 font-bold text-foreground">
+                                  {p.nome}
+                                  {p.dados_extras?.peito && (
+                                    <span className="ml-2 font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                      Peito {p.dados_extras.peito}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3.5 font-mono text-muted-foreground">
+                                  {p.telefone || '—'}
+                                </td>
+                                <td className="p-3.5">
+                                  {st === 'lido' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                      <CheckCheck className="h-3 w-3 text-blue-600" /> Lido no Zap
+                                    </span>
+                                  ) : st === 'entregue' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-muted text-muted-foreground border border-border">
+                                      <CheckCheck className="h-3 w-3 text-muted-foreground" /> Entregue
+                                    </span>
+                                  ) : st === 'enviado' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-muted text-muted-foreground border border-border">
+                                      <Check className="h-3 w-3 text-muted-foreground" /> Enviado
+                                    </span>
+                                  ) : st === 'erro' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-destructive/10 text-destructive border border-destructive/20">
+                                      <AlertCircle className="h-3 w-3" /> Falha
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-muted/40 text-muted-foreground border border-border/60">
+                                      <Clock className="h-3 w-3" /> Não enviado
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3.5">
+                                  {p.respondeu ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Respondeu
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                      <Clock className="h-3 w-3" /> Pendente
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAbrirTimelineAtleta(p)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-border bg-card hover:bg-muted text-[11px] font-bold text-foreground transition-colors cursor-pointer"
+                                    title="Ver histórico e linha do tempo deste participante"
+                                  >
+                                    <HistoryIcon className="h-3 w-3 text-primary" />
+                                    Linha do Tempo
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -1603,6 +2257,270 @@ export const WhatsAppPage: React.FC = () => {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: CRIAR NOVA CAMPANHA DE DISPARO (ONDA) */}
+      {/* ============================================================ */}
+      {modalNovaCampanhaOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-border w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-black text-foreground">
+                  Nova Campanha de Disparo (Onda)
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure o público-alvo e a mensagem que será enviada aos participantes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalNovaCampanhaOpen(false)}
+                className="p-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Nome da Campanha */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                  Nome da Campanha / Onda:
+                </label>
+                <input
+                  type="text"
+                  value={nomeNovaCampanha}
+                  onChange={e => setNomeNovaCampanha(e.target.value)}
+                  placeholder="Ex: 1ª Onda: Convite Geral Pós-Prova"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {/* Filtro do Público */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                  Público-Alvo do Disparo:
+                </label>
+                <select
+                  value={filtroPublicoNovaCampanha}
+                  onChange={e => setFiltroPublicoNovaCampanha(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  <option value="pendentes">
+                    Apenas Pendentes (Atletas que ainda NÃO responderam) [Recomendado]
+                  </option>
+                  <option value="todos">
+                    Todos os Atletas cadastrados no projeto
+                  </option>
+                  <option value="nao_lidos">
+                    Apenas quem NÃO leu a mensagem anterior no WhatsApp
+                  </option>
+                </select>
+
+                <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Atletas aptos para esta onda:</span>
+                  <span className="font-black text-foreground text-sm">
+                    {filtroPublicoNovaCampanha === 'pendentes'
+                      ? participantesDisparo.filter(p => !p.respondeu).length
+                      : filtroPublicoNovaCampanha === 'nao_lidos'
+                      ? participantesDisparo.filter(p => !p.respondeu && p.status_whatsapp !== 'lido').length
+                      : participantesDisparo.length} atletas
+                  </span>
+                </div>
+              </div>
+
+              {/* Mensagem */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                    Mensagem do WhatsApp:
+                  </label>
+                  <select
+                    onChange={e => {
+                      const t = templates.find(item => item.id === e.target.value)
+                      if (t) setMensagemNovaCampanha(t.mensagem)
+                    }}
+                    className="text-xs border border-border rounded-lg px-2 py-1 bg-background text-muted-foreground cursor-pointer"
+                  >
+                    <option value="">Carregar de Modelo...</option>
+                    {templates.filter(t => t.objeto_id === objetoDisparo).map(tpl => (
+                      <option key={tpl.id} value={tpl.id}>{tpl.titulo}</option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  value={mensagemNovaCampanha}
+                  onChange={e => setMensagemNovaCampanha(e.target.value)}
+                  rows={4}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 leading-relaxed font-sans"
+                />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[11px] text-muted-foreground self-center mr-1">Tags permitidas:</span>
+                  {['{{primeiro_nome}}', '{{nome}}', '{{corrida}}', '{{link}}', '{{distancia}}', '{{peito}}'].map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setMensagemNovaCampanha(prev => prev + ' ' + tag)}
+                      className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-[10px] font-mono text-foreground border border-border cursor-pointer transition-colors"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview Real */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase">
+                  Preview do Balão WhatsApp:
+                </label>
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-foreground font-sans leading-relaxed whitespace-pre-wrap">
+                  {ZApiService.personalizarMensagem(
+                    mensagemNovaCampanha,
+                    participantesDisparo[0] || ({ id: '1', nome: 'Atleta Exemplo' } as any),
+                    linkPesquisaDisparoAtiva,
+                    objetos.find(o => o.id === objetoDisparo)?.nome || 'Corrida'
+                  )}
+                </div>
+              </div>
+
+              {/* Ações */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setModalNovaCampanhaOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-foreground cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSalvarNovaCampanha(false)}
+                  disabled={salvandoCampanha}
+                  className="px-4 py-2.5 rounded-xl border border-border bg-muted hover:bg-muted/80 text-xs font-bold text-foreground cursor-pointer"
+                >
+                  Salvar Rascunho
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSalvarNovaCampanha(true)}
+                  disabled={salvandoCampanha}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md cursor-pointer"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Salvar e Disparar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: LINHA DO TEMPO DO PARTICIPANTE */}
+      {/* ============================================================ */}
+      {modalTimelineOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-border w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                  <HistoryIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-foreground">
+                    Linha do Tempo de Comunicações
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {atletaTimeline?.nome} • {atletaTimeline?.telefone || 'Sem telefone'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalTimelineOpen(false)}
+                className="p-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {carregandoTimeline ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">
+                <Clock className="h-4 w-4 animate-spin text-primary" />
+                Carregando histórico...
+              </div>
+            ) : historicoTimeline.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-xs">
+                Nenhum registro de disparo ou resposta encontrado para este participante.
+              </div>
+            ) : (
+              <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+                {historicoTimeline.map((item, idx) => (
+                  <div key={idx} className="relative pl-8 space-y-1">
+                    <div className="absolute left-1.5 top-1.5 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-background border-2 border-primary" />
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-foreground">
+                        {item.tipo === 'resposta' 
+                          ? 'Pesquisa Respondida' 
+                          : item.campanha_nome 
+                          ? `Disparo: ${item.campanha_nome}` 
+                          : 'Disparo no WhatsApp'}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {new Date(item.data).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+
+                    {item.tipo === 'disparo' ? (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          item.status === 'lido'
+                            ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+                            : item.status === 'entregue'
+                            ? 'bg-muted text-muted-foreground border border-border'
+                            : item.status === 'enviado'
+                            ? 'bg-muted text-muted-foreground border border-border'
+                            : 'bg-destructive/10 text-destructive border border-destructive/20'
+                        }`}>
+                          {item.status === 'lido' && <CheckCheck className="h-3 w-3 text-blue-600" />}
+                          {item.status === 'entregue' && <CheckCheck className="h-3 w-3 text-muted-foreground" />}
+                          {item.status === 'enviado' && <Check className="h-3 w-3 text-muted-foreground" />}
+                          {item.status === 'lido' ? 'Lido no WhatsApp' : item.status === 'entregue' ? 'Entregue' : item.status === 'enviado' ? 'Enviado' : 'Falha'}
+                        </span>
+                        {item.lido_em && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Lido às {new Date(item.lido_em).toLocaleTimeString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="pt-0.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                          Formulário Completo
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setModalTimelineOpen(false)}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

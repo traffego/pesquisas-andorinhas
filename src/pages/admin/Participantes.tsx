@@ -24,7 +24,10 @@ import {
   TrendingUp,
   Download,
   Phone,
-  RotateCcw
+  RotateCcw,
+  History,
+  CheckCheck,
+  RefreshCw
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -39,6 +42,12 @@ export const Participantes: React.FC = () => {
   const [filtroObjeto, setFiltroObjeto] = useState<string>('')
   const [filtroPesquisa, setFiltroPesquisa] = useState<string>('')
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'respondeu' | 'pendente'>('todos')
+
+  // Timeline / Histórico do Atleta
+  const [timelineAtleta, setTimelineAtleta] = useState<ParticipanteComStatus | null>(null)
+  const [historicoTimeline, setHistoricoTimeline] = useState<any[]>([])
+  const [carregandoTimeline, setCarregandoTimeline] = useState(false)
+  const [modalTimelineOpen, setModalTimelineOpen] = useState(false)
   const [busca, setBusca] = useState<string>('')
 
   // Modais
@@ -186,6 +195,20 @@ export const Participantes: React.FC = () => {
       alert(`Resposta de "${p.nome}" excluída com sucesso! O atleta voltou ao status Pendente.`)
     } catch (err: any) {
       alert('Erro ao excluir resposta: ' + err.message)
+    }
+  }
+
+  const handleAbrirTimeline = async (p: ParticipanteComStatus) => {
+    setTimelineAtleta(p)
+    setModalTimelineOpen(true)
+    setCarregandoTimeline(true)
+    try {
+      const hist = await dbService.getHistoricoParticipante(p.id, filtroObjeto || undefined)
+      setHistoricoTimeline(hist)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCarregandoTimeline(false)
     }
   }
 
@@ -475,14 +498,49 @@ export const Participantes: React.FC = () => {
                               <RotateCcw className="h-3.5 w-3.5" />
                             </button>
                           </div>
+                        ) : p.status_whatsapp === 'lido' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirTimeline(p)}
+                            title={`Lido no WhatsApp em ${p.lido_em ? new Date(p.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''} (Clique para ver histórico)`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 border border-blue-500/20 hover:bg-blue-500/20 transition-all cursor-pointer"
+                          >
+                            <CheckCheck className="h-3.5 w-3.5" /> Lido no Zap
+                          </button>
+                        ) : p.status_whatsapp === 'entregue' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirTimeline(p)}
+                            title="Entregue no celular (ainda não abriu a conversa)"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-muted-foreground border border-border hover:bg-muted/80 transition-all cursor-pointer"
+                          >
+                            <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/60" /> Entregue
+                          </button>
+                        ) : p.ja_notificado || p.status_whatsapp === 'enviado' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirTimeline(p)}
+                            title={`Enviado em ${p.notificado_em ? new Date(p.notificado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+                          >
+                            <Clock className="h-3.5 w-3.5" /> Enviado
+                          </button>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                            <Clock className="h-3.5 w-3.5" /> Pendente
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground/60 border border-border/40">
+                            Pendente
                           </span>
                         )}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirTimeline(p)}
+                            className="p-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors cursor-pointer"
+                            title="Ver Linha do Tempo e histórico de mensagens deste atleta"
+                          >
+                            <History className="h-4 w-4" />
+                          </button>
                           {p.telefone && (
                             <button
                               onClick={() => handleAbrirEnvioIndividual(p)}
@@ -720,6 +778,116 @@ export const Participantes: React.FC = () => {
                   <Send className="h-3.5 w-3.5" />
                 )}
                 {enviandoIndividual ? 'Disparando...' : 'Enviar Agora'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    
+      {/* ============================================================ */}
+      {/* MODAL / GAVETA: LINHA DO TEMPO DO ATLETA (HISTÓRICO DISPAROS) */}
+      {/* ============================================================ */}
+      {modalTimelineOpen && timelineAtleta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border-l border-border h-full w-full max-w-md p-6 shadow-2xl flex flex-col space-y-6 overflow-hidden">
+            {/* Header da Timeline */}
+            <div className="flex items-start justify-between border-b border-border pb-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary block">
+                  Linha do Tempo de Comunicações
+                </span>
+                <h3 className="text-lg font-black text-foreground">{timelineAtleta.nome}</h3>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {timelineAtleta.telefone || 'Sem telefone'} • Peito #{timelineAtleta.dados_extras?.peito || timelineAtleta.dados_extras?.num || '-'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalTimelineOpen(false)}
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo da Timeline */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {carregandoTimeline ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-primary" />
+                  Carregando histórico do atleta...
+                </div>
+              ) : historicoTimeline.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground bg-muted/30 rounded-2xl border border-border">
+                  Nenhuma mensagem registrada ainda para este atleta.
+                </div>
+              ) : (
+                historicoTimeline.map((item, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl border border-border bg-muted/20 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-extrabold text-foreground">{item.campanha_nome}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {new Date(item.enviado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {item.mensagem_texto && (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-foreground leading-relaxed">
+                        <span className="text-[10px] font-extrabold text-emerald-600 uppercase block mb-1">Texto Enviado:</span>
+                        {item.mensagem_texto}
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Disparo Z-API:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {new Date(item.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Entregue no Celular:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {item.entregue_em ? new Date(item.entregue_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Pendente'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-blue-500/10 text-blue-600 font-bold border border-blue-500/20">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCheck className="h-3.5 w-3.5" /> Lido no WhatsApp:
+                        </span>
+                        <span className="font-mono">
+                          {item.lido_em ? new Date(item.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Ainda não visualizado'}
+                        </span>
+                      </div>
+
+                      {item.respondeu && (
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Formulário Respondido:
+                          </span>
+                          <span className="font-mono">
+                            {item.respondeu_em ? new Date(item.respondeu_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Sim'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Rodapé da Gaveta */}
+            <div className="border-t border-border pt-4 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Total de disparos: <strong>{historicoTimeline.length}</strong></span>
+              <button
+                type="button"
+                onClick={() => setModalTimelineOpen(false)}
+                className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-bold cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>

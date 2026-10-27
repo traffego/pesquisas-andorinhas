@@ -61,19 +61,45 @@ export interface ParticipanteComStatus extends Participante {
   respondeu: boolean
   ja_notificado?: boolean
   notificado_em?: string | null
+  status_whatsapp?: 'enviado' | 'entregue' | 'lido' | 'erro' | 'pendente'
+  entregue_em?: string | null
+  lido_em?: string | null
 }
 
 export interface DisparoLog {
   id?: string
+  campanha_id?: string | null
   participante_id: string
   pesquisa_id: string
   objeto_id: string
   telefone: string
-  status: 'enviado' | 'erro'
+  status: 'enviado' | 'entregue' | 'lido' | 'erro'
   message_id?: string
   zaap_id?: string
   erro?: string
+  entregue_em?: string | null
+  lido_em?: string | null
   created_at?: string
+}
+
+export interface CampanhaDisparo {
+  id: string
+  objeto_id: string
+  objeto_nome?: string
+  pesquisa_id: string
+  pesquisa_titulo?: string
+  pesquisa_token?: string
+  nome: string
+  mensagem_texto: string
+  filtro_publico: 'todos' | 'pendentes' | 'nao_lidos' | 'custom'
+  status: 'rascunho' | 'enviando' | 'concluido'
+  total_destinatarios: number
+  enviados_count: number
+  entregues_count: number
+  lidos_count: number
+  respondidos_count: number
+  disparado_em?: string | null
+  created_at: string
 }
 
 export interface ConfigZApi {
@@ -458,16 +484,27 @@ export const dbService = {
           .eq('pesquisa_id', filtros.pesquisaId),
         supabase
           .from('disparo_whatsapp_log')
-          .select('participante_id, created_at')
+          .select('participante_id, created_at, status, entregue_em, lido_em')
           .eq('pesquisa_id', filtros.pesquisaId)
-          .eq('status', 'enviado')
+          .neq('status', 'erro')
       ])
 
       const respList = respRes.data || []
       const dispList = dispRes.data || []
-      const dispMap = new Map<string, string>()
+      const dispMap = new Map<string, { created_at: string; status: 'enviado' | 'entregue' | 'lido' | 'erro'; entregue_em?: string | null; lido_em?: string | null }>()
       dispList.forEach((d: any) => {
-        if (d.participante_id) dispMap.set(d.participante_id, d.created_at)
+        if (d.participante_id) {
+          // Se houver mais de um log, prioriza o status mais avançado (lido > entregue > enviado)
+          const atual = dispMap.get(d.participante_id)
+          if (!atual || d.status === 'lido' || (d.status === 'entregue' && atual.status !== 'lido')) {
+            dispMap.set(d.participante_id, {
+              created_at: d.created_at,
+              status: d.status,
+              entregue_em: d.entregue_em,
+              lido_em: d.lido_em
+            })
+          }
+        }
       })
 
       list = list.map(p => {
@@ -483,7 +520,10 @@ export const dbService = {
           resposta_id: rMatch?.id || null,
           resposta_data: rMatch?.created_at || null,
           ja_notificado: !!notifData,
-          notificado_em: notifData || null
+          notificado_em: notifData?.created_at || null,
+          status_whatsapp: notifData ? notifData.status : 'pendente',
+          entregue_em: notifData?.entregue_em || null,
+          lido_em: notifData?.lido_em || null
         }
       })
     }
@@ -657,12 +697,14 @@ export const dbService = {
     pesquisaId: string
     objetoId: string
     telefone: string
-    status: 'enviado' | 'erro'
+    status: 'enviado' | 'entregue' | 'lido' | 'erro'
+    campanhaId?: string
     messageId?: string
     zaapId?: string
     erro?: string
   }): Promise<void> {
     const { error } = await supabase.from('disparo_whatsapp_log').insert({
+      campanha_id: dados.campanhaId || null,
       participante_id: dados.participanteId,
       pesquisa_id: dados.pesquisaId,
       objeto_id: dados.objetoId,
@@ -675,6 +717,197 @@ export const dbService = {
     if (error) {
       console.warn('Erro ao registrar log de disparo:', error)
     }
+  },
+
+  // --- GESTÃO DE CAMPANHAS DE DISPARO ---
+  async getCampanhas(pesquisaId?: string, objetoId?: string): Promise<CampanhaDisparo[]> {
+    let query = supabase
+      .from('disparo_campanha')
+      .select('*, objeto:objeto_id(nome), pesquisa:pesquisa_id(titulo, token)')
+      .order('created_at', { ascending: false })
+
+    if (pesquisaId) {
+      query = query.eq('pesquisa_id', pesquisaId)
+    }
+    if (objetoId) {
+      query = query.eq('objeto_id', objetoId)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return (data || []).map((c: any) => ({
+      ...c,
+      objeto_nome: c.objeto?.nome || undefined,
+      pesquisa_titulo: c.pesquisa?.titulo || undefined,
+      pesquisa_token: c.pesquisa?.token || undefined
+    }))
+  },
+
+  async getCampanhaById(id: string): Promise<CampanhaDisparo | null> {
+    const { data, error } = await supabase
+      .from('disparo_campanha')
+      .select('*, objeto:objeto_id(nome), pesquisa:pesquisa_id(titulo, token)')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return null
+
+    return {
+      ...data,
+      objeto_nome: data.objeto?.nome || undefined,
+      pesquisa_titulo: data.pesquisa?.titulo || undefined,
+      pesquisa_token: data.pesquisa?.token || undefined
+    }
+  },
+
+  async saveCampanha(campanha: Partial<CampanhaDisparo>): Promise<CampanhaDisparo> {
+    const dados: any = {
+      objeto_id: campanha.objeto_id,
+      pesquisa_id: campanha.pesquisa_id,
+      nome: campanha.nome,
+      mensagem_texto: campanha.mensagem_texto,
+      filtro_publico: campanha.filtro_publico || 'todos',
+      status: campanha.status || 'rascunho',
+      total_destinatarios: campanha.total_destinatarios ?? 0,
+      enviados_count: campanha.enviados_count ?? 0,
+      entregues_count: campanha.entregues_count ?? 0,
+      lidos_count: campanha.lidos_count ?? 0,
+      respondidos_count: campanha.respondidos_count ?? 0,
+      disparado_em: campanha.disparado_em || null
+    }
+
+    if (campanha.id) {
+      const { data, error } = await supabase
+        .from('disparo_campanha')
+        .update(dados)
+        .eq('id', campanha.id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    } else {
+      const { data, error } = await supabase
+        .from('disparo_campanha')
+        .insert(dados)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    }
+  },
+
+  async deleteCampanha(id: string): Promise<void> {
+    const { error } = await supabase.from('disparo_campanha').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  async getLogsCampanha(campanhaId: string): Promise<DisparoLog[]> {
+    const { data, error } = await supabase
+      .from('disparo_whatsapp_log')
+      .select('*')
+      .eq('campanha_id', campanhaId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  },
+
+  async getEstatisticasCampanha(campanhaId: string): Promise<{
+    total: number
+    enviados: number
+    entregues: number
+    lidos: number
+    respondidos: number
+  }> {
+    const [logsRes, campRes] = await Promise.all([
+      supabase
+        .from('disparo_whatsapp_log')
+        .select('participante_id, status, pesquisa_id')
+        .eq('campanha_id', campanhaId),
+      supabase
+        .from('disparo_campanha')
+        .select('pesquisa_id, total_destinatarios')
+        .eq('id', campanhaId)
+        .maybeSingle()
+    ])
+
+    const logs = logsRes.data || []
+    const pesquisaId = campRes.data?.pesquisa_id
+
+    const total = campRes.data?.total_destinatarios || logs.length
+    const enviados = logs.filter(l => l.status !== 'erro').length
+    const entregues = logs.filter(l => l.status === 'entregue' || l.status === 'lido').length
+    const lidos = logs.filter(l => l.status === 'lido').length
+
+    let respondidos = 0
+    if (pesquisaId && logs.length > 0) {
+      const partIds = logs.map(l => l.participante_id).filter(Boolean)
+      if (partIds.length > 0) {
+        const { count } = await supabase
+          .from('resposta')
+          .select('id', { count: 'exact', head: true })
+          .eq('pesquisa_id', pesquisaId)
+          .in('participante_id', partIds)
+        respondidos = count || 0
+      }
+    }
+
+    return { total, enviados, entregues, lidos, respondidos }
+  },
+
+  async getHistoricoParticipante(participanteId: string, objetoId?: string): Promise<Array<{
+    campanha_id?: string
+    campanha_nome?: string
+    pesquisa_id?: string
+    status: 'enviado' | 'entregue' | 'lido' | 'erro'
+    telefone: string
+    enviado_em: string
+    entregue_em?: string | null
+    lido_em?: string | null
+    mensagem_texto?: string
+    respondeu: boolean
+    respondeu_em?: string | null
+  }>> {
+    let query = supabase
+      .from('disparo_whatsapp_log')
+      .select('*, campanha:campanha_id(nome, mensagem_texto)')
+      .eq('participante_id', participanteId)
+      .order('created_at', { ascending: false })
+
+    if (objetoId) {
+      query = query.eq('objeto_id', objetoId)
+    }
+
+    const { data: logs, error } = await query
+    if (error) throw error
+
+    // Busca também se já respondeu em alguma das pesquisas desses logs
+    const pesqIds = Array.from(new Set((logs || []).map((l: any) => l.pesquisa_id).filter(Boolean)))
+    const { data: resps } = pesqIds.length > 0 
+      ? await supabase.from('resposta').select('pesquisa_id, created_at').eq('participante_id', participanteId).in('pesquisa_id', pesqIds)
+      : { data: [] }
+
+    const respMap = new Map<string, string>()
+    ;(resps || []).forEach((r: any) => respMap.set(r.pesquisa_id, r.created_at))
+
+    return (logs || []).map((l: any) => {
+      const respData = l.pesquisa_id ? respMap.get(l.pesquisa_id) : undefined
+      return {
+        campanha_id: l.campanha_id,
+        campanha_nome: l.campanha?.nome || 'Envio Direto',
+        pesquisa_id: l.pesquisa_id,
+        status: l.status,
+        telefone: l.telefone,
+        enviado_em: l.created_at,
+        entregue_em: l.entregue_em,
+        lido_em: l.lido_em,
+        mensagem_texto: l.campanha?.mensagem_texto || undefined,
+        respondeu: !!respData,
+        respondeu_em: respData || null
+      }
+    })
   },
 
   async limparLogsDisparo(pesquisaId: string, objetoId?: string): Promise<void> {
