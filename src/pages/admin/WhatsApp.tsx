@@ -2472,58 +2472,68 @@ export const WhatsAppPage: React.FC = () => {
                 Carregando histórico...
               </div>
             ) : historicoTimeline.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-xs">
+              <div className="p-8 text-center text-muted-foreground text-xs bg-muted/20 rounded-2xl border border-border">
                 Nenhum registro de disparo ou resposta encontrado para este participante.
               </div>
             ) : (
-              <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+              <div className="space-y-4">
                 {historicoTimeline.map((item, idx) => (
-                  <div key={idx} className="relative pl-8 space-y-1">
-                    <div className="absolute left-1.5 top-1.5 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-background border-2 border-primary" />
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-foreground">
-                        {item.tipo === 'resposta' 
-                          ? 'Pesquisa Respondida' 
-                          : item.campanha_nome 
-                          ? `Disparo: ${item.campanha_nome}` 
-                          : 'Disparo no WhatsApp'}
+                  <div key={idx} className="p-4 rounded-2xl border border-border bg-muted/20 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-extrabold text-foreground">
+                        {item.campanha_nome ? `Disparo: ${item.campanha_nome}` : 'Disparo Individual WhatsApp'}
                       </span>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {new Date(item.data).toLocaleString('pt-BR')}
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {item.enviado_em ? new Date(item.enviado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
                       </span>
                     </div>
 
-                    {item.tipo === 'disparo' ? (
-                      <div className="flex items-center gap-2 pt-0.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          item.status === 'lido'
-                            ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
-                            : item.status === 'entregue'
-                            ? 'bg-muted text-muted-foreground border border-border'
-                            : item.status === 'enviado'
-                            ? 'bg-muted text-muted-foreground border border-border'
-                            : 'bg-destructive/10 text-destructive border border-destructive/20'
-                        }`}>
-                          {item.status === 'lido' && <CheckCheck className="h-3 w-3 text-blue-600" />}
-                          {item.status === 'entregue' && <CheckCheck className="h-3 w-3 text-muted-foreground" />}
-                          {item.status === 'enviado' && <Check className="h-3 w-3 text-muted-foreground" />}
-                          {item.status === 'lido' ? 'Lido no WhatsApp' : item.status === 'entregue' ? 'Entregue' : item.status === 'enviado' ? 'Enviado' : 'Falha'}
-                        </span>
-                        {item.lido_em && (
-                          <span className="text-[10px] text-muted-foreground">
-                            Lido às {new Date(item.lido_em).toLocaleTimeString('pt-BR')}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="pt-0.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                          Formulário Completo
-                        </span>
+                    {item.mensagem_texto && (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-foreground leading-relaxed">
+                        <span className="text-[10px] font-extrabold text-emerald-600 uppercase block mb-1">Texto Enviado:</span>
+                        {item.mensagem_texto}
                       </div>
                     )}
+
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Disparo Z-API:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {item.enviado_em ? new Date(item.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Entregue no Celular:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {item.entregue_em ? new Date(item.entregue_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Pendente'}
+                        </span>
+                      </div>
+
+                      <div className={`flex items-center justify-between p-2 rounded-lg font-bold border ${
+                        item.status === 'lido' || item.lido_em
+                          ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                          : 'bg-muted/40 text-muted-foreground border-border'
+                      }`}>
+                        <span className="flex items-center gap-1.5">
+                          <CheckCheck className="h-3.5 w-3.5" /> Lido no WhatsApp:
+                        </span>
+                        <span className="font-mono">
+                          {item.lido_em ? new Date(item.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Ainda não visualizado'}
+                        </span>
+                      </div>
+
+                      {item.respondeu && (
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Formulário Respondido:
+                          </span>
+                          <span className="font-mono">
+                            {item.respondeu_em ? new Date(item.respondeu_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Sim'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
