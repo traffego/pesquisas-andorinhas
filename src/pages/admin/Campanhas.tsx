@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   dbService, 
   type Objeto, 
@@ -31,7 +31,10 @@ import {
   Shield,
   ShieldCheck,
   Zap,
-  Coffee
+  Coffee,
+  Pause,
+  Play,
+  StopCircle
 } from 'lucide-react'
 
 // Configurações dos Perfis de Segurança Anti-Bloqueio
@@ -132,13 +135,23 @@ export const Campanhas: React.FC = () => {
   const [salvandoCampanha, setSalvandoCampanha] = useState(false)
   const [participantesDisparo, setParticipantesDisparo] = useState<ParticipanteComStatus[]>([])
 
+  // Modal: Confirmação & Ajuste de Perfil (Sem alertas nativos)
+  const [modalConfirmarDisparoOpen, setModalConfirmarDisparoOpen] = useState(false)
+  const [campanhaParaDisparar, setCampanhaParaDisparar] = useState<CampanhaDisparo | null>(null)
+  const [participantesAptosConfirmacao, setParticipantesAptosConfirmacao] = useState<ParticipanteComStatus[]>([])
+  const [perfilConfirmacao, setPerfilConfirmacao] = useState<PerfilSegurancaId>('moderado')
+
   // Modal: Progresso Disparo em Lote
   const [modalLoteOpen, setModalLoteOpen] = useState(false)
   const [emLoteProcessando, setEmLoteProcessando] = useState(false)
-  const [cancelarLote, setCancelarLote] = useState(false)
+  const [emLotePausado, setEmLotePausado] = useState(false)
   const [progressoLote, setProgressoLote] = useState({ total: 0, atual: 0, enviados: 0, erros: 0 })
   const [perfilExecutando, setPerfilExecutando] = useState<PerfilSegurancaId>('moderado')
   const [statusResfriamento, setStatusResfriamento] = useState<{ emPausa: boolean; segundosRestantes: number }>({ emPausa: false, segundosRestantes: 0 })
+  const [metricasAoVivoLote, setMetricasAoVivoLote] = useState({ entregues: 0, lidos: 0, respondidos: 0 })
+
+  const pausadoRef = useRef(false)
+  const cancelarLoteRef = useRef(false)
 
   useEffect(() => {
     carregarDadosIniciais()
@@ -365,6 +378,7 @@ export const Campanhas: React.FC = () => {
   }
 
   // --- DISPARO EM LOTE ---
+  // Abre o modal de confirmação e seleção de perfil (sem alert)
   const handleIniciarDisparo = async (camp: CampanhaDisparo) => {
     if (!ZApiService.isConfigValida(configZApi)) {
       alert('Por favor, configure suas credenciais da Z-API na aba WhatsApp antes de iniciar o envio.')
@@ -390,29 +404,51 @@ export const Campanhas: React.FC = () => {
       return
     }
 
-    const pesq = pesquisas.find(p => p.id === camp.pesquisa_id)
-    const linkPesq = pesq?.token ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}` : 'https://pesquisas-andorinhas.vercel.app/'
+    setCampanhaParaDisparar(camp)
+    setParticipantesAptosConfirmacao(aptos)
+    setPerfilConfirmacao((camp.perfil_seguranca as PerfilSegurancaId) || 'moderado')
+    setModalConfirmarDisparoOpen(true)
+  }
 
-    const perfilId: PerfilSegurancaId = (camp.perfil_seguranca as PerfilSegurancaId) || 'moderado'
+  // Executa o disparo após confirmação pelo modal
+  const handleExecutarDisparoConfirmado = async () => {
+    if (!campanhaParaDisparar) return
+    const camp = campanhaParaDisparar
+    const aptos = participantesAptosConfirmacao
+    const perfilId = perfilConfirmacao
     const perfil = PERFIS_SEGURANCA[perfilId] || PERFIS_SEGURANCA.moderado
+
+    setModalConfirmarDisparoOpen(false)
     setPerfilExecutando(perfilId)
 
-    const tempoEst = calcularTempoEstimado(aptos.length, perfilId)
-
-    if (!confirm(`Confirmar disparo para ${aptos.length} participantes da campanha "${camp.nome}"?\n\nPerfil de Segurança: ${perfil.titulo} (${perfil.delayTexto})\nTempo Estimado: ${tempoEst}\nLink oficial: ${linkPesq}`)) {
-      return
+    // Atualiza o perfil na campanha se mudou
+    if (camp.perfil_seguranca !== perfilId) {
+      await dbService.saveCampanha({ id: camp.id, perfil_seguranca: perfilId }).catch(() => {})
+      camp.perfil_seguranca = perfilId
     }
 
-    setCancelarLote(false)
+    cancelarLoteRef.current = false
+    setEmLotePausado(false)
+    pausadoRef.current = false
+
     setEmLoteProcessando(true)
     setModalLoteOpen(true)
     setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
     setProgressoLote({ total: aptos.length, atual: 0, enviados: 0, erros: 0 })
+    setMetricasAoVivoLote({ entregues: 0, lidos: 0, respondidos: 0 })
 
+    const pesq = pesquisas.find(p => p.id === camp.pesquisa_id)
+    const linkPesq = pesq?.token ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}` : 'https://pesquisas-andorinhas.vercel.app/'
     const obj = objetos.find(o => o.id === camp.objeto_id)
 
     for (let i = 0; i < aptos.length; i++) {
-      if (cancelarLote) break
+      if (cancelarLoteRef.current) break
+
+      // Controle de Pausa do Usuário
+      while (pausadoRef.current && !cancelarLoteRef.current) {
+        await new Promise(r => setTimeout(r, 400))
+      }
+      if (cancelarLoteRef.current) break
 
       const p = aptos[i]
       const msg = ZApiService.personalizarMensagem(
@@ -452,12 +488,27 @@ export const Campanhas: React.FC = () => {
         setProgressoLote(prev => ({ ...prev, atual: i + 1, erros: prev.erros + 1 }))
       }
 
-      if (i < aptos.length - 1 && !cancelarLote) {
+      // Atualiza métricas ao vivo do funil a cada 2 mensagens
+      if ((i + 1) % 2 === 0 || i === aptos.length - 1) {
+        try {
+          const logsAtuais = await dbService.getLogsCampanha(camp.id)
+          const resp = logsAtuais.filter(l => l.respondeu).length
+          const lid = logsAtuais.filter(l => l.status === 'lido' || l.respondeu).length
+          const ent = logsAtuais.filter(l => l.status === 'entregue' || l.status === 'lido' || l.respondeu).length
+          setMetricasAoVivoLote({ entregues: ent, lidos: lid, respondidos: resp })
+          setLogsCampanha(logsAtuais)
+        } catch {}
+      }
+
+      if (i < aptos.length - 1 && !cancelarLoteRef.current) {
         const enviadosAteAgora = i + 1
         // Pausa de resfriamento em lote (Cooling)
         if (perfil.tamanhoLote < 9999 && enviadosAteAgora % perfil.tamanhoLote === 0 && perfil.tempoDescansoSegundos > 0) {
           for (let seg = perfil.tempoDescansoSegundos; seg > 0; seg--) {
-            if (cancelarLote) break
+            if (cancelarLoteRef.current) break
+            while (pausadoRef.current && !cancelarLoteRef.current) {
+              await new Promise(r => setTimeout(r, 400))
+            }
             setStatusResfriamento({ emPausa: true, segundosRestantes: seg })
             await new Promise(r => setTimeout(r, 1000))
           }
@@ -465,12 +516,23 @@ export const Campanhas: React.FC = () => {
         } else {
           // Delay dinâmico aleatório com jitter anti-robô
           const delayRandom = Math.floor(Math.random() * (perfil.maxDelay - perfil.minDelay + 1)) + perfil.minDelay
-          await new Promise(r => setTimeout(r, delayRandom))
+          const fatias = Math.ceil(delayRandom / 200)
+          for (let f = 0; f < fatias; f++) {
+            if (cancelarLoteRef.current) break
+            while (pausadoRef.current && !cancelarLoteRef.current) {
+              await new Promise(r => setTimeout(r, 400))
+            }
+            await new Promise(r => setTimeout(r, 200))
+          }
         }
       }
     }
 
     setEmLoteProcessando(false)
+    setEmLotePausado(false)
+    pausadoRef.current = false
+    setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
+
     await dbService.saveCampanha({
       id: camp.id,
       status: 'concluido',
@@ -478,6 +540,18 @@ export const Campanhas: React.FC = () => {
     })
     await carregarListaCampanhas(filtroPesquisa, filtroObjeto)
     await selecionarCampanha(camp)
+  }
+
+  const handleTogglePausarLote = () => {
+    const novo = !emLotePausado
+    setEmLotePausado(novo)
+    pausadoRef.current = novo
+  }
+
+  const handleCancelarLote = () => {
+    cancelarLoteRef.current = true
+    pausadoRef.current = false
+    setEmLotePausado(false)
   }
 
   const handleExcluirCampanha = async (id: string, nome: string) => {
@@ -1364,16 +1438,142 @@ export const Campanhas: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* MODAL: PROGRESSO DO DISPARO EM LOTE */}
+      {/* MODAL: CONFIRMAÇÃO DE DISPARO & SELEÇÃO DE PERFIL */}
+      {/* ============================================================ */}
+      {modalConfirmarDisparoOpen && campanhaParaDisparar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-border w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  <Send className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-foreground">
+                    Confirmar Envio da Campanha
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Revise os parâmetros e selecione o perfil de segurança ideal.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalConfirmarDisparoOpen(false)}
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Resumo da Rodada */}
+            <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-medium">Campanha:</span>
+                <span className="font-black text-foreground">{campanhaParaDisparar.nome}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-medium">Destinatários Aptos:</span>
+                <span className="font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  {participantesAptosConfirmacao.length} atletas pendentes
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-border/40">
+                <span className="text-muted-foreground font-medium">Tempo Estimado de Conclusão:</span>
+                <span className="font-black text-primary font-mono text-sm">
+                  {calcularTempoEstimado(participantesAptosConfirmacao.length, perfilConfirmacao)}
+                </span>
+              </div>
+            </div>
+
+            {/* Seletor Visual dos 3 Perfis */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-foreground tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Nível de Proteção Anti-Bloqueio:
+              </label>
+
+              <div className="space-y-2">
+                {(Object.keys(PERFIS_SEGURANCA) as PerfilSegurancaId[]).map(key => {
+                  const perfil = PERFIS_SEGURANCA[key]
+                  const Icone = perfil.icone
+                  const selecionado = perfilConfirmacao === key
+
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => setPerfilConfirmacao(key)}
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        selecionado
+                          ? 'bg-primary/5 border-primary ring-2 ring-primary/20 shadow-xs'
+                          : 'bg-card border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl border ${perfil.corBadge}`}>
+                          <Icone className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-foreground">{perfil.titulo}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase border ${perfil.corBadge}`}>
+                              {perfil.badgeRisco}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                            {perfil.descricao}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-black text-primary block font-mono">
+                          {calcularTempoEstimado(participantesAptosConfirmacao.length, key)}
+                        </span>
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          {selecionado ? '✓ Ativo' : 'Selecionar'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setModalConfirmarDisparoOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-border bg-muted hover:bg-muted/80 text-xs font-bold text-foreground cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecutarDisparoConfirmado}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md cursor-pointer transition-all"
+              >
+                <Send className="h-4 w-4" />
+                Iniciar Disparo ({calcularTempoEstimado(participantesAptosConfirmacao.length, perfilConfirmacao)})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: PROGRESSO DO DISPARO EM LOTE (COM PAUSA & MÉTRICAS) */}
       {/* ============================================================ */}
       {modalLoteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-card border border-border w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-5">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center justify-center">
-                <Send className="h-8 w-8 animate-pulse" />
+                <Send className={`h-8 w-8 ${emLotePausado ? '' : 'animate-pulse'}`} />
               </div>
-              <h3 className="text-lg font-black text-foreground">Disparo de Campanha em Andamento</h3>
+              <h3 className="text-lg font-black text-foreground">
+                {emLotePausado ? 'Disparo Pausado' : 'Disparo em Andamento'}
+              </h3>
               
               {/* Badge do perfil de segurança ativo */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-muted/40 border-border">
@@ -1383,14 +1583,31 @@ export const Campanhas: React.FC = () => {
               </div>
             </div>
 
-            {/* Aviso de Resfriamento / Pausa Anti-Bloqueio */}
-            {statusResfriamento.emPausa && (
+            {/* Banner de Pausa pelo Usuário */}
+            {emLotePausado && (
               <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 animate-pulse">
                 <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400">
-                  <Coffee className="h-5 w-5" />
+                  <Pause className="h-5 w-5" />
                 </div>
                 <div className="space-y-0.5">
                   <h4 className="text-xs font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider">
+                    Envio Pausado pelo Usuário
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    O robô está congelado. Clique em <strong>Retomar Envio</strong> quando quiser prosseguir.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso de Resfriamento / Pausa Anti-Bloqueio Automática */}
+            {!emLotePausado && statusResfriamento.emPausa && (
+              <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-3 animate-pulse">
+                <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                  <Coffee className="h-5 w-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-black uppercase text-blue-800 dark:text-blue-300 tracking-wider">
                     Pausa de Resfriamento Anti-Spam
                   </h4>
                   <p className="text-xs text-muted-foreground">
@@ -1404,7 +1621,8 @@ export const Campanhas: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-2">
+            {/* Barra de Progresso */}
+            <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-bold">
                 <span>Progresso do Envio</span>
                 <span>{progressoLote.atual} / {progressoLote.total}</span>
@@ -1415,23 +1633,54 @@ export const Campanhas: React.FC = () => {
                   className="h-full bg-emerald-500 transition-all duration-300"
                 />
               </div>
-              <div className="flex justify-between text-[11px] text-muted-foreground pt-1">
-                <span className="text-emerald-600 font-bold">✓ Enviados: {progressoLote.enviados}</span>
-                {progressoLote.erros > 0 && (
-                  <span className="text-destructive font-bold">✕ Erros: {progressoLote.erros}</span>
-                )}
+            </div>
+
+            {/* Cockpit de Métricas ao Vivo no Próprio Modal */}
+            <div className="grid grid-cols-4 gap-2 text-center pt-1">
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[9px] font-extrabold uppercase text-muted-foreground block">Env.</span>
+                <span className="text-sm font-black text-foreground">{progressoLote.enviados}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[9px] font-extrabold uppercase text-muted-foreground block">Entr.</span>
+                <span className="text-sm font-black text-foreground">{metricasAoVivoLote.entregues}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <span className="text-[9px] font-extrabold uppercase text-blue-600 block">Lidos</span>
+                <span className="text-sm font-black text-blue-600">{metricasAoVivoLote.lidos}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-[9px] font-extrabold uppercase text-emerald-600 block">Resp.</span>
+                <span className="text-sm font-black text-emerald-600">{metricasAoVivoLote.respondidos}</span>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Botões de Controle (Pausar / Retomar / Cancelar) */}
+            <div className="flex items-center gap-2 pt-2 border-t border-border">
               {emLoteProcessando ? (
-                <button
-                  type="button"
-                  onClick={() => setCancelarLote(true)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Cancelar Disparo
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleTogglePausarLote}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      emLotePausado
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
+                    }`}
+                  >
+                    {emLotePausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                    {emLotePausado ? 'Retomar Envio' : 'Pausar Envio'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCancelarLote}
+                    className="px-3.5 py-2.5 rounded-xl border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <StopCircle className="h-3.5 w-3.5" />
+                    Parar
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
