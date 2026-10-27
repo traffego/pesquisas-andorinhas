@@ -25,10 +25,80 @@ import {
   ChevronUp, 
   FolderGit2, 
   ClipboardList, 
-  Phone,
-  MessageSquare,
-  X
+  Phone, 
+  MessageSquare, 
+  X,
+  Shield,
+  ShieldCheck,
+  Zap,
+  Coffee
 } from 'lucide-react'
+
+// Configurações dos Perfis de Segurança Anti-Bloqueio
+export const PERFIS_SEGURANCA = {
+  rapido: {
+    id: 'rapido' as const,
+    titulo: 'Rápido (Atual)',
+    icone: Zap,
+    delayTexto: '6 a 8s',
+    minDelay: 6000,
+    maxDelay: 8000,
+    tamanhoLote: 9999, // sem pausas de lote
+    tempoDescansoSegundos: 0,
+    nivelRisco: 'alto',
+    badgeRisco: 'Alto Risco',
+    corBadge: 'bg-destructive/10 text-destructive border-destructive/20',
+    descricao: 'Intervalo curto de 6–8s sem pausas. Use apenas em chips antigos com alta reputação.'
+  },
+  moderado: {
+    id: 'moderado' as const,
+    titulo: 'Moderado (Recomendado)',
+    icone: ShieldCheck,
+    delayTexto: '12 a 22s',
+    minDelay: 12000,
+    maxDelay: 22000,
+    tamanhoLote: 25, // descanso a cada 25 mensagens
+    tempoDescansoSegundos: 120, // 2 minutos de resfriamento
+    nivelRisco: 'baixo',
+    badgeRisco: 'Recomendado',
+    corBadge: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    descricao: 'Intervalo dinâmico de 12–22s com jitter humano + descanso de 2 min a cada 25 envios.'
+  },
+  ultra_seguro: {
+    id: 'ultra_seguro' as const,
+    titulo: 'Ultra Seguro',
+    icone: Shield,
+    delayTexto: '20 a 40s',
+    minDelay: 20000,
+    maxDelay: 40000,
+    tamanhoLote: 20, // descanso a cada 20 mensagens
+    tempoDescansoSegundos: 180, // 3 minutos de resfriamento
+    nivelRisco: 'minimo',
+    badgeRisco: 'Máxima Blindagem',
+    corBadge: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+    descricao: 'Intervalo espaçado de 20–40s + descanso de 3 min a cada 20 envios. Ideal para chips recém-reativados.'
+  }
+}
+
+export type PerfilSegurancaId = keyof typeof PERFIS_SEGURANCA
+
+export const calcularTempoEstimado = (qtd: number, perfilId: PerfilSegurancaId) => {
+  if (qtd <= 0) return '0 min'
+  const p = PERFIS_SEGURANCA[perfilId]
+  const delayMedioSegundos = (p.minDelay + p.maxDelay) / 2000
+  const tempoDisparos = qtd * delayMedioSegundos
+  const qtdPausas = p.tamanhoLote < 9999 ? Math.floor((qtd - 1) / p.tamanhoLote) : 0
+  const tempoPausas = qtdPausas * p.tempoDescansoSegundos
+  const totalSegundos = Math.round(tempoDisparos + tempoPausas)
+
+  const horas = Math.floor(totalSegundos / 3600)
+  const minutos = Math.ceil((totalSegundos % 3600) / 60)
+
+  if (horas > 0) {
+    return `~${horas}h ${minutos}min`
+  }
+  return `~${minutos} min`
+}
 
 export const Campanhas: React.FC = () => {
   const [campanhas, setCampanhas] = useState<CampanhaDisparo[]>([])
@@ -57,6 +127,7 @@ export const Campanhas: React.FC = () => {
   const [objetoNovaCampanha, setObjetoNovaCampanha] = useState('')
   const [pesquisaNovaCampanhaId, setPesquisaNovaCampanhaId] = useState('')
   const [filtroPublicoNovaCampanha, setFiltroPublicoNovaCampanha] = useState<'todos' | 'pendentes' | 'nao_lidos'>('todos')
+  const [perfilSegurancaNovaCampanha, setPerfilSegurancaNovaCampanha] = useState<PerfilSegurancaId>('moderado')
   const [mensagemNovaCampanha, setMensagemNovaCampanha] = useState('')
   const [salvandoCampanha, setSalvandoCampanha] = useState(false)
   const [participantesDisparo, setParticipantesDisparo] = useState<ParticipanteComStatus[]>([])
@@ -66,6 +137,8 @@ export const Campanhas: React.FC = () => {
   const [emLoteProcessando, setEmLoteProcessando] = useState(false)
   const [cancelarLote, setCancelarLote] = useState(false)
   const [progressoLote, setProgressoLote] = useState({ total: 0, atual: 0, enviados: 0, erros: 0 })
+  const [perfilExecutando, setPerfilExecutando] = useState<PerfilSegurancaId>('moderado')
+  const [statusResfriamento, setStatusResfriamento] = useState<{ emPausa: boolean; segundosRestantes: number }>({ emPausa: false, segundosRestantes: 0 })
 
   useEffect(() => {
     carregarDadosIniciais()
@@ -222,6 +295,7 @@ export const Campanhas: React.FC = () => {
     const numOnda = campanhas.length + 1
     setNomeNovaCampanha(`${numOnda}ª Onda: Envio de Pesquisa`)
     setFiltroPublicoNovaCampanha('todos')
+    setPerfilSegurancaNovaCampanha('moderado')
 
     const obj = objetos.find(o => o.id === objId)
     setMensagemNovaCampanha(`Olá, {{primeiro_nome}}! Sua opinião sobre a ${obj?.nome || 'nossa corrida'} é fundamental. Responda no link oficial: {{link}}`)
@@ -264,6 +338,7 @@ export const Campanhas: React.FC = () => {
         nome: nomeNovaCampanha.trim(),
         mensagem_texto: mensagemNovaCampanha,
         filtro_publico: filtroPublicoNovaCampanha,
+        perfil_seguranca: perfilSegurancaNovaCampanha,
         status: iniciarDisparo ? 'enviando' : 'rascunho',
         total_destinatarios: destCount,
         enviados_count: 0,
@@ -318,13 +393,20 @@ export const Campanhas: React.FC = () => {
     const pesq = pesquisas.find(p => p.id === camp.pesquisa_id)
     const linkPesq = pesq?.token ? `https://pesquisas-andorinhas.vercel.app/r/${pesq.token}` : 'https://pesquisas-andorinhas.vercel.app/'
 
-    if (!confirm(`Confirmar disparo para ${aptos.length} participantes da campanha "${camp.nome}"?\n\nLink oficial: ${linkPesq}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
+    const perfilId: PerfilSegurancaId = (camp.perfil_seguranca as PerfilSegurancaId) || 'moderado'
+    const perfil = PERFIS_SEGURANCA[perfilId] || PERFIS_SEGURANCA.moderado
+    setPerfilExecutando(perfilId)
+
+    const tempoEst = calcularTempoEstimado(aptos.length, perfilId)
+
+    if (!confirm(`Confirmar disparo para ${aptos.length} participantes da campanha "${camp.nome}"?\n\nPerfil de Segurança: ${perfil.titulo} (${perfil.delayTexto})\nTempo Estimado: ${tempoEst}\nLink oficial: ${linkPesq}`)) {
       return
     }
 
     setCancelarLote(false)
     setEmLoteProcessando(true)
     setModalLoteOpen(true)
+    setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
     setProgressoLote({ total: aptos.length, atual: 0, enviados: 0, erros: 0 })
 
     const obj = objetos.find(o => o.id === camp.objeto_id)
@@ -371,7 +453,20 @@ export const Campanhas: React.FC = () => {
       }
 
       if (i < aptos.length - 1 && !cancelarLote) {
-        await new Promise(r => setTimeout(r, 6000))
+        const enviadosAteAgora = i + 1
+        // Pausa de resfriamento em lote (Cooling)
+        if (perfil.tamanhoLote < 9999 && enviadosAteAgora % perfil.tamanhoLote === 0 && perfil.tempoDescansoSegundos > 0) {
+          for (let seg = perfil.tempoDescansoSegundos; seg > 0; seg--) {
+            if (cancelarLote) break
+            setStatusResfriamento({ emPausa: true, segundosRestantes: seg })
+            await new Promise(r => setTimeout(r, 1000))
+          }
+          setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
+        } else {
+          // Delay dinâmico aleatório com jitter anti-robô
+          const delayRandom = Math.floor(Math.random() * (perfil.maxDelay - perfil.minDelay + 1)) + perfil.minDelay
+          await new Promise(r => setTimeout(r, delayRandom))
+        }
       }
     }
 
@@ -1116,6 +1211,62 @@ export const Campanhas: React.FC = () => {
                 </div>
               </div>
 
+              {/* Perfil de Segurança Anti-Bloqueio */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    Perfil de Segurança Anti-Bloqueio:
+                  </label>
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    Tempo estimado ({participantesDisparo.length || 0} contatos): <strong className="text-foreground">{calcularTempoEstimado(participantesDisparo.length || 0, perfilSegurancaNovaCampanha)}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {(Object.keys(PERFIS_SEGURANCA) as PerfilSegurancaId[]).map(key => {
+                    const perfil = PERFIS_SEGURANCA[key]
+                    const Icone = perfil.icone
+                    const selecionado = perfilSegurancaNovaCampanha === key
+
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => setPerfilSegurancaNovaCampanha(key)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer space-y-1.5 flex flex-col justify-between ${
+                          selecionado
+                            ? 'bg-primary/5 border-primary ring-2 ring-primary/20 shadow-xs'
+                            : 'bg-card border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-black text-foreground flex items-center gap-1">
+                              <Icone className={`h-3.5 w-3.5 ${selecionado ? 'text-primary' : 'text-muted-foreground'}`} />
+                              {perfil.titulo.split(' ')[0]}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase border ${perfil.corBadge}`}>
+                              {perfil.badgeRisco}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            Intervalo: <strong className="text-foreground">{perfil.delayTexto}</strong>
+                            {perfil.tamanhoLote < 9999 ? ' • Pausa a cada ' + perfil.tamanhoLote : ' • Sem pausas'}
+                          </p>
+                        </div>
+
+                        <div className="pt-1.5 text-[10px] font-bold text-primary flex items-center justify-between border-t border-border/50">
+                          <span>{calcularTempoEstimado(participantesDisparo.length || 100, key)}</span>
+                          <span className={selecionado ? 'font-black underline' : 'text-muted-foreground'}>
+                            {selecionado ? '✓ Ativo' : 'Selecionar'}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">Texto da Mensagem:</label>
                 <textarea
@@ -1211,23 +1362,48 @@ export const Campanhas: React.FC = () => {
       {/* ============================================================ */}
       {modalLoteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-card border border-border w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-6">
+          <div className="bg-card border border-border w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-5">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center justify-center">
                 <Send className="h-8 w-8 animate-pulse" />
               </div>
               <h3 className="text-lg font-black text-foreground">Disparo de Campanha em Andamento</h3>
-              <p className="text-xs text-muted-foreground">
-                Enviando mensagens personalizadas com intervalo seguro de 6 segundos.
-              </p>
+              
+              {/* Badge do perfil de segurança ativo */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-muted/40 border-border">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                <span>Perfil: {PERFIS_SEGURANCA[perfilExecutando]?.titulo || 'Moderado'}</span>
+                <span className="text-[10px] text-muted-foreground">({PERFIS_SEGURANCA[perfilExecutando]?.delayTexto})</span>
+              </div>
             </div>
+
+            {/* Aviso de Resfriamento / Pausa Anti-Bloqueio */}
+            {statusResfriamento.emPausa && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 animate-pulse">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                  <Coffee className="h-5 w-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider">
+                    Pausa de Resfriamento Anti-Spam
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Descanso programado para proteger o chip. Retomando em{' '}
+                    <strong className="text-foreground font-mono font-bold">
+                      {Math.floor(statusResfriamento.segundosRestantes / 60)}:
+                      {(statusResfriamento.segundosRestantes % 60).toString().padStart(2, '0')}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
-                <span>Progresso</span>
+                <span>Progresso do Envio</span>
                 <span>{progressoLote.atual} / {progressoLote.total}</span>
               </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
                 <div
                   style={{ width: `${progressoLote.total > 0 ? (progressoLote.atual / progressoLote.total) * 100 : 0}%` }}
                   className="h-full bg-emerald-500 transition-all duration-300"

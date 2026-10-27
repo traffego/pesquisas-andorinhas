@@ -38,8 +38,11 @@ import {
   History as HistoryIcon,
   Eye,
   Layers,
-  Search
+  Search,
+  ShieldCheck,
+  Coffee
 } from 'lucide-react'
+import { PERFIS_SEGURANCA, calcularTempoEstimado, type PerfilSegurancaId } from './Campanhas'
 
 export const WhatsAppPage: React.FC = () => {
   const [tabAtiva, setTabAtiva] = useState<'conexao' | 'mensagens' | 'disparos'>('conexao')
@@ -111,10 +114,13 @@ export const WhatsAppPage: React.FC = () => {
   const [carregandoCampanhas, setCarregandoCampanhas] = useState(false)
   const [modalNovaCampanhaOpen, setModalNovaCampanhaOpen] = useState(false)
   const [filtroPublicoNovaCampanha, setFiltroPublicoNovaCampanha] = useState<'todos' | 'pendentes' | 'nao_lidos'>('todos')
+  const [perfilSegurancaNovaCampanha, setPerfilSegurancaNovaCampanha] = useState<PerfilSegurancaId>('moderado')
   const [nomeNovaCampanha, setNomeNovaCampanha] = useState('')
   const [pesquisaNovaCampanhaId, setPesquisaNovaCampanhaId] = useState('')
   const [mensagemNovaCampanha, setMensagemNovaCampanha] = useState('')
   const [salvandoCampanha, setSalvandoCampanha] = useState(false)
+  const [statusResfriamento, setStatusResfriamento] = useState<{ emPausa: boolean; segundosRestantes: number }>({ emPausa: false, segundosRestantes: 0 })
+  const [perfilExecutando, setPerfilExecutando] = useState<PerfilSegurancaId>('moderado')
   const [filtroStatusCockpit, setFiltroStatusCockpit] = useState<'todos' | 'lido' | 'entregue' | 'enviado' | 'respondido' | 'pendente'>('todos')
   const [buscaCockpit, setBuscaCockpit] = useState('')
   const [logsCampanhaAtiva, setLogsCampanhaAtiva] = useState<DisparoLog[]>([])
@@ -530,6 +536,7 @@ export const WhatsAppPage: React.FC = () => {
     
     setNomeNovaCampanha(sugerido)
     setFiltroPublicoNovaCampanha(preFiltro || (numOnda === 1 ? 'todos' : 'pendentes'))
+    setPerfilSegurancaNovaCampanha('moderado')
     setPesquisaNovaCampanhaId(pesquisaDisparoId || pesquisasDoObjetoDisparo[0]?.id || '')
 
     const obj = objetos.find(o => o.id === objetoDisparo)
@@ -569,6 +576,7 @@ export const WhatsAppPage: React.FC = () => {
         nome: nomeNovaCampanha.trim(),
         mensagem_texto: mensagemNovaCampanha,
         filtro_publico: filtroPublicoNovaCampanha,
+        perfil_seguranca: perfilSegurancaNovaCampanha,
         status: iniciarDisparo ? 'enviando' : 'rascunho',
         total_destinatarios: destCount,
         enviados_count: 0,
@@ -844,13 +852,20 @@ export const WhatsAppPage: React.FC = () => {
     const pesq = pesquisas.find(p => p.id === pesquisaDisparoId)
     const alvoDesc = camp ? `campanha "${camp.nome}"` : `pesquisa "${pesq?.titulo || obj?.nome}"`
 
-    if (!confirm(`Confirmar disparo para ${listaAptos.length} participantes da ${alvoDesc}?\n\nLink que será enviado: ${linkPesquisaDisparoAtiva}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
+    const perfilId: PerfilSegurancaId = (camp?.perfil_seguranca as PerfilSegurancaId) || 'moderado'
+    const perfil = PERFIS_SEGURANCA[perfilId] || PERFIS_SEGURANCA.moderado
+    setPerfilExecutando(perfilId)
+
+    const tempoEst = calcularTempoEstimado(listaAptos.length, perfilId)
+
+    if (!confirm(`Confirmar disparo para ${listaAptos.length} participantes da ${alvoDesc}?\n\nPerfil de Segurança: ${perfil.titulo} (${perfil.delayTexto})\nTempo Estimado: ${tempoEst}\nLink que será enviado: ${linkPesquisaDisparoAtiva}`)) {
       return
     }
 
     setCancelarLote(false)
     setEmLoteProcessando(true)
     setModalLoteOpen(true)
+    setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
     setProgressoLote({
       total: listaAptos.length,
       atual: 0,
@@ -925,9 +940,20 @@ export const WhatsAppPage: React.FC = () => {
         }))
       }
 
-      // Intervalo de segurança anti-bloqueio Z-API (6 segundos) exceto no último item
+      // Intervalo de segurança anti-bloqueio com perfil dinâmico e resfriamento
       if (i < lista.length - 1 && !cancelarLote) {
-        await new Promise(r => setTimeout(r, 6000))
+        const enviadosAteAgora = i + 1
+        if (perfil.tamanhoLote < 9999 && enviadosAteAgora % perfil.tamanhoLote === 0 && perfil.tempoDescansoSegundos > 0) {
+          for (let seg = perfil.tempoDescansoSegundos; seg > 0; seg--) {
+            if (cancelarLote) break
+            setStatusResfriamento({ emPausa: true, segundosRestantes: seg })
+            await new Promise(r => setTimeout(r, 1000))
+          }
+          setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
+        } else {
+          const delayRandom = Math.floor(Math.random() * (perfil.maxDelay - perfil.minDelay + 1)) + perfil.minDelay
+          await new Promise(r => setTimeout(r, delayRandom))
+        }
       }
     }
 
@@ -2220,9 +2246,11 @@ export const WhatsAppPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
                 <h3 className="text-lg font-black text-foreground">Disparo em Massa em Andamento</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Intervalo seguro anti-bloqueio Z-API ativo (6s por mensagem)
-                </p>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border bg-muted/40 border-border mt-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  <span>Perfil: {PERFIS_SEGURANCA[perfilExecutando]?.titulo || 'Moderado'}</span>
+                  <span className="text-muted-foreground">({PERFIS_SEGURANCA[perfilExecutando]?.delayTexto})</span>
+                </div>
               </div>
               {!emLoteProcessando && (
                 <button
@@ -2233,6 +2261,27 @@ export const WhatsAppPage: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {/* Aviso de Resfriamento / Pausa Anti-Bloqueio */}
+            {statusResfriamento.emPausa && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 animate-pulse">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                  <Coffee className="h-5 w-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-black uppercase text-amber-800 dark:text-amber-300 tracking-wider">
+                    Pausa de Resfriamento Anti-Spam
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Descanso programado para proteger sua conta. Retomando em{' '}
+                    <strong className="text-foreground font-mono font-bold">
+                      {Math.floor(statusResfriamento.segundosRestantes / 60)}:
+                      {(statusResfriamento.segundosRestantes % 60).toString().padStart(2, '0')}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               {/* Barra de Progresso */}
@@ -2368,6 +2417,62 @@ export const WhatsAppPage: React.FC = () => {
                       ? participantesDisparo.filter(p => !p.respondeu && p.status_whatsapp !== 'lido').length
                       : participantesDisparo.length} atletas
                   </span>
+                </div>
+              </div>
+
+              {/* Perfil de Segurança Anti-Bloqueio */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    Perfil de Segurança Anti-Bloqueio:
+                  </label>
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    Estimativa: <strong className="text-foreground">{calcularTempoEstimado(participantesDisparo.length || 0, perfilSegurancaNovaCampanha)}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {(Object.keys(PERFIS_SEGURANCA) as PerfilSegurancaId[]).map(key => {
+                    const perfil = PERFIS_SEGURANCA[key]
+                    const Icone = perfil.icone
+                    const selecionado = perfilSegurancaNovaCampanha === key
+
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => setPerfilSegurancaNovaCampanha(key)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer space-y-1.5 flex flex-col justify-between ${
+                          selecionado
+                            ? 'bg-primary/5 border-primary ring-2 ring-primary/20 shadow-xs'
+                            : 'bg-card border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-black text-foreground flex items-center gap-1">
+                              <Icone className={`h-3.5 w-3.5 ${selecionado ? 'text-primary' : 'text-muted-foreground'}`} />
+                              {perfil.titulo.split(' ')[0]}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase border ${perfil.corBadge}`}>
+                              {perfil.badgeRisco}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            Intervalo: <strong className="text-foreground">{perfil.delayTexto}</strong>
+                            {perfil.tamanhoLote < 9999 ? ' • Pausa a cada ' + perfil.tamanhoLote : ' • Sem pausas'}
+                          </p>
+                        </div>
+
+                        <div className="pt-1.5 text-[10px] font-bold text-primary flex items-center justify-between border-t border-border/50">
+                          <span>{calcularTempoEstimado(participantesDisparo.length || 100, key)}</span>
+                          <span className={selecionado ? 'font-black underline' : 'text-muted-foreground'}>
+                            {selecionado ? '✓ Ativo' : 'Selecionar'}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 

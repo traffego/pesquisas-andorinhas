@@ -100,6 +100,7 @@ export interface CampanhaDisparo {
   nome: string
   mensagem_texto: string
   filtro_publico: 'todos' | 'pendentes' | 'nao_lidos' | 'custom'
+  perfil_seguranca?: 'rapido' | 'moderado' | 'ultra_seguro'
   status: 'rascunho' | 'enviando' | 'concluido'
   total_destinatarios: number
   enviados_count: number
