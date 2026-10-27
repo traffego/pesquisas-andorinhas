@@ -248,10 +248,10 @@ export const Campanhas: React.FC = () => {
       return { total: 0, enviados: 0, entregues: 0, lidos: 0, respondidos: 0, pctEntregues: 0, pctLidos: 0, pctResp: 0 }
     }
     const total = logsCampanha.length || campanhaSelecionada.total_destinatarios || 0
-    const enviados = logsCampanha.filter(l => l.status !== 'erro').length
-    const entregues = logsCampanha.filter(l => l.status === 'entregue' || l.status === 'lido').length
-    const lidos = logsCampanha.filter(l => l.status === 'lido').length
     const respondidos = logsCampanha.filter(l => l.respondeu).length
+    const lidos = logsCampanha.filter(l => l.status === 'lido' || l.respondeu).length
+    const entregues = logsCampanha.filter(l => l.status === 'entregue' || l.status === 'lido' || l.respondeu).length
+    const enviados = logsCampanha.filter(l => l.status !== 'erro').length
 
     const pctEntregues = total > 0 ? Math.round((entregues / total) * 100) : 0
     const pctLidos = total > 0 ? Math.round((lidos / total) * 100) : 0
@@ -274,8 +274,8 @@ export const Campanhas: React.FC = () => {
       }
 
       // Filtro de status
-      if (filtroStatusDisparo === 'lido' && l.status !== 'lido') return false
-      if (filtroStatusDisparo === 'entregue' && l.status !== 'entregue' && l.status !== 'lido') return false
+      if (filtroStatusDisparo === 'lido' && l.status !== 'lido' && !l.respondeu) return false
+      if (filtroStatusDisparo === 'entregue' && l.status !== 'entregue' && l.status !== 'lido' && !l.respondeu) return false
       if (filtroStatusDisparo === 'enviado' && l.status !== 'enviado') return false
       if (filtroStatusDisparo === 'respondido' && !l.respondeu) return false
       if (filtroStatusDisparo === 'erro' && l.status !== 'erro') return false
@@ -948,10 +948,12 @@ export const Campanhas: React.FC = () => {
 
                             {/* Badge do Ciclo de Vida do WhatsApp */}
                             <td className="p-3 whitespace-nowrap">
-                              {log.status === 'lido' ? (
+                              {log.status === 'lido' || log.respondeu ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-blue-500/10 text-blue-600 border border-blue-500/20 shadow-xs">
                                   <CheckCheck className="h-3.5 w-3.5" />
-                                  Lido {log.lido_em ? `às ${new Date(log.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+                                  {log.status === 'lido' && log.lido_em
+                                    ? `Lido às ${new Date(log.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                                    : 'Lido (Confirmado)'}
                                 </span>
                               ) : log.status === 'entregue' ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-muted text-foreground border border-border">
@@ -1055,7 +1057,7 @@ export const Campanhas: React.FC = () => {
                                       </div>
 
                                       <div className={`flex items-center justify-between p-2 rounded-xl font-bold border ${
-                                        log.status === 'lido' || log.lido_em
+                                        log.status === 'lido' || log.lido_em || log.respondeu
                                           ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
                                           : 'bg-muted/20 text-muted-foreground border-border'
                                       }`}>
@@ -1064,7 +1066,11 @@ export const Campanhas: React.FC = () => {
                                           3. Lido no WhatsApp:
                                         </span>
                                         <span className="font-mono">
-                                          {log.lido_em ? new Date(log.lido_em).toLocaleString('pt-BR') : 'Ainda não visualizado'}
+                                          {log.lido_em 
+                                            ? new Date(log.lido_em).toLocaleString('pt-BR') 
+                                            : log.respondeu 
+                                            ? 'Confirmado via resposta' 
+                                            : 'Ainda não visualizado'}
                                         </span>
                                       </div>
 

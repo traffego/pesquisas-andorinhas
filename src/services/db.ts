@@ -868,11 +868,7 @@ export const dbService = {
 
     const logs = logsRes.data || []
     const pesquisaId = campRes.data?.pesquisa_id
-
     const total = campRes.data?.total_destinatarios || logs.length
-    const enviados = logs.filter(l => l.status !== 'erro').length
-    const entregues = logs.filter(l => l.status === 'entregue' || l.status === 'lido').length
-    const lidos = logs.filter(l => l.status === 'lido').length
 
     let respondidos = 0
     if (pesquisaId && logs.length > 0) {
@@ -886,6 +882,12 @@ export const dbService = {
         respondidos = count || 0
       }
     }
+
+    const lidosBruto = logs.filter(l => l.status === 'lido').length
+    const lidos = Math.max(lidosBruto, respondidos)
+    const entreguesBruto = logs.filter(l => l.status === 'entregue' || l.status === 'lido').length
+    const entregues = Math.max(entreguesBruto, lidos)
+    const enviados = Math.max(logs.filter(l => l.status !== 'erro').length, entregues)
 
     return { total, enviados, entregues, lidos, respondidos }
   },
