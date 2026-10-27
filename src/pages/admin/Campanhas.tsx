@@ -1122,11 +1122,57 @@ export const Campanhas: React.FC = () => {
                   value={mensagemNovaCampanha}
                   onChange={e => setMensagemNovaCampanha(e.target.value)}
                   rows={4}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 leading-relaxed"
                 />
-                <span className="text-[10px] text-muted-foreground">
-                  Variáveis automáticas: {'{{primeiro_nome}}'}, {'{{nome}}'}, {'{{corrida}}'}, {'{{link}}'}
-                </span>
+                
+                {/* Botões de inserção de tags */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[11px] text-muted-foreground self-center mr-1">Tags permitidas:</span>
+                  {['{{primeiro_nome}}', '{{nome}}', '{{corrida}}', '{{link}}', '{{distancia}}', '{{peito}}'].map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setMensagemNovaCampanha(prev => prev + (prev.endsWith(' ') || prev.length === 0 ? '' : ' ') + tag + ' ')}
+                      className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-[10px] font-mono text-foreground border border-border cursor-pointer transition-colors"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Previsão Real da Mensagem (Balão WhatsApp) */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                    Previsão de Envio (Preview no WhatsApp):
+                  </label>
+                  <span className="text-[10px] text-muted-foreground font-medium">
+                    Simulação em tempo real
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between text-[11px] text-emerald-800 dark:text-emerald-300 font-bold border-b border-emerald-500/20 pb-1.5">
+                    <span>Para: {participantesDisparo[0]?.nome || 'Lucas Silva'}</span>
+                    <span className="font-mono text-[10px]">{participantesDisparo[0]?.telefone || '(21) 98161-2199'}</span>
+                  </div>
+                  <p className="text-xs text-foreground font-sans leading-relaxed whitespace-pre-wrap">
+                    {ZApiService.personalizarMensagem(
+                      mensagemNovaCampanha,
+                      participantesDisparo[0] || ({ id: '1', nome: 'Lucas Silva', dados_extras: { peito: '421', distancia: '10km' } } as any),
+                      pesquisas.find(p => p.id === pesquisaNovaCampanhaId)?.token 
+                        ? `https://pesquisas-andorinhas.vercel.app/r/${pesquisas.find(p => p.id === pesquisaNovaCampanhaId)?.token}` 
+                        : 'https://pesquisas-andorinhas.vercel.app/r/exemplo',
+                      objetos.find(o => o.id === objetoNovaCampanha)?.nome || 'Corrida'
+                    )}
+                  </p>
+                  <div className="flex items-center justify-end gap-1 text-[10px] text-emerald-700/80 dark:text-emerald-400 font-mono pt-1">
+                    <span>{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
+                  </div>
+                </div>
               </div>
             </div>
 
