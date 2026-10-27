@@ -495,6 +495,20 @@ export const WhatsAppPage: React.FC = () => {
     }
   }
 
+  // Polling automático de logs e status em tempo real enquanto o cockpit estiver aberto
+  useEffect(() => {
+    if (!campanhaAtiva) return
+    const timer = setInterval(async () => {
+      try {
+        const logs = await dbService.getLogsCampanha(campanhaAtiva.id)
+        setLogsCampanhaAtiva(logs)
+      } catch (e) {
+        console.error('Erro no auto-refresh do cockpit:', e)
+      }
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [campanhaAtiva?.id])
+
   const handleVoltarListaCampanhas = () => {
     setCampanhaAtiva(null)
     setLogsCampanhaAtiva([])
@@ -706,7 +720,7 @@ export const WhatsAppPage: React.FC = () => {
   const handleIniciarDisparoCampanha = async (camp: CampanhaDisparo) => {
     setCampanhaAtiva(camp)
     setMensagemCustomizadaDisparo(camp.mensagem_texto)
-    await handleIniciarDisparoEmLote()
+    await handleIniciarDisparoEmLote(camp)
   }
 
   const estatisticasDisparo = useMemo(() => {
@@ -792,7 +806,7 @@ export const WhatsAppPage: React.FC = () => {
     }
   }
 
-  const handleIniciarDisparoEmLote = async () => {
+  const handleIniciarDisparoEmLote = async (campanhaAlvo?: CampanhaDisparo) => {
     if (!ZApiService.isConfigValida(configZApi)) {
       alert('Por favor, configure as credenciais da Z-API antes de iniciar o envio.')
       setTabAtiva('conexao')
@@ -805,8 +819,10 @@ export const WhatsAppPage: React.FC = () => {
       }
     }
 
+    const camp = campanhaAlvo || campanhaAtiva
+
     let listaAptos: ParticipanteComStatus[] = []
-    if (campanhaAtiva) {
+    if (camp) {
       const jaNotificadosIds = new Set(logsCampanhaAtiva.map(l => l.participante_id))
       listaAptos = participantesCampanhaAtiva.filter(p => !p.respondeu && !jaNotificadosIds.has(p.id) && p.telefone && p.telefone.replace(/\D/g, '').length >= 10)
     } else {
@@ -820,7 +836,7 @@ export const WhatsAppPage: React.FC = () => {
 
     const obj = objetos.find(o => o.id === objetoDisparo)
     const pesq = pesquisas.find(p => p.id === pesquisaDisparoId)
-    const alvoDesc = campanhaAtiva ? `campanha "${campanhaAtiva.nome}"` : `pesquisa "${pesq?.titulo || obj?.nome}"`
+    const alvoDesc = camp ? `campanha "${camp.nome}"` : `pesquisa "${pesq?.titulo || obj?.nome}"`
 
     if (!confirm(`Confirmar disparo para ${listaAptos.length} participantes da ${alvoDesc}?\n\nLink que será enviado: ${linkPesquisaDisparoAtiva}\nIntervalo de segurança: 6 segundos entre mensagens.`)) {
       return
@@ -844,7 +860,7 @@ export const WhatsAppPage: React.FC = () => {
       }
 
       const p = lista[i]
-      const msgTexto = campanhaAtiva?.mensagem_texto || mensagemCustomizadaDisparo
+      const msgTexto = camp?.mensagem_texto || mensagemCustomizadaDisparo
       const msg = ZApiService.personalizarMensagem(
         msgTexto,
         p,
@@ -861,7 +877,7 @@ export const WhatsAppPage: React.FC = () => {
             objetoId: objetoDisparo,
             telefone: p.telefone!,
             status: 'enviado',
-            campanhaId: campanhaAtiva?.id,
+            campanhaId: camp?.id,
             messageId: res.messageId,
             zaapId: res.zaapId
           })
@@ -874,7 +890,7 @@ export const WhatsAppPage: React.FC = () => {
             objetoId: objetoDisparo,
             telefone: p.telefone!,
             status: 'erro',
-            campanhaId: campanhaAtiva?.id,
+            campanhaId: camp?.id,
             erro: res.erro || 'Falha no envio Z-API'
           })
         }
@@ -910,13 +926,13 @@ export const WhatsAppPage: React.FC = () => {
     }
 
     setEmLoteProcessando(false)
-    if (campanhaAtiva) {
+    if (camp) {
       await dbService.saveCampanha({
-        id: campanhaAtiva.id,
+        id: camp.id,
         status: 'concluido',
         disparado_em: new Date().toISOString()
       })
-      const logsAtualizados = await dbService.getLogsCampanha(campanhaAtiva.id)
+      const logsAtualizados = await dbService.getLogsCampanha(camp.id)
       setLogsCampanhaAtiva(logsAtualizados)
       await carregarCampanhas(pesquisaDisparoId, objetoDisparo)
     }
