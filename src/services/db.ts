@@ -101,7 +101,7 @@ export interface CampanhaDisparo {
   mensagem_texto: string
   filtro_publico: 'todos' | 'pendentes' | 'nao_lidos' | 'custom'
   perfil_seguranca?: 'rapido' | 'moderado' | 'ultra_seguro'
-  status: 'rascunho' | 'enviando' | 'concluido'
+  status: 'rascunho' | 'enviando' | 'pausado' | 'concluido'
   total_destinatarios: number
   enviados_count: number
   entregues_count: number
@@ -744,13 +744,79 @@ export const dbService = {
 
     const { data, error } = await query
     if (error) throw error
+    if (!data || data.length === 0) return []
 
-    return (data || []).map((c: any) => ({
-      ...c,
-      objeto_nome: c.objeto?.nome || undefined,
-      pesquisa_titulo: c.pesquisa?.titulo || undefined,
-      pesquisa_token: c.pesquisa?.token || undefined
-    }))
+    // Agregação dinâmica em tempo real de logs e respostas
+    const campIds = data.map((c: any) => c.id)
+    const { data: logs } = await supabase
+      .from('disparo_whatsapp_log')
+      .select('campanha_id, status, participante_id, pesquisa_id')
+      .in('campanha_id', campIds)
+
+    const logsPorCamp = new Map<string, any[]>()
+    ;(logs || []).forEach((l: any) => {
+      if (l.campanha_id) {
+        if (!logsPorCamp.has(l.campanha_id)) logsPorCamp.set(l.campanha_id, [])
+        logsPorCamp.get(l.campanha_id)!.push(l)
+      }
+    })
+
+    const todosPartIds = Array.from(new Set((logs || []).map((l: any) => l.participante_id).filter(Boolean)))
+    const respMap = new Map<string, Set<string>>()
+    if (todosPartIds.length > 0) {
+      const { data: resps } = await supabase
+        .from('resposta')
+        .select('pesquisa_id, participante_id')
+        .in('participante_id', todosPartIds)
+
+      ;(resps || []).forEach((r: any) => {
+        if (r.pesquisa_id && r.participante_id) {
+          if (!respMap.has(r.pesquisa_id)) respMap.set(r.pesquisa_id, new Set())
+          respMap.get(r.pesquisa_id)!.add(r.participante_id)
+        }
+      })
+    }
+
+    return data.map((c: any) => {
+      const campLogs = logsPorCamp.get(c.id) || []
+      const respSet = respMap.get(c.pesquisa_id) || new Set()
+
+      let respondidos = 0
+      let lidos = 0
+      let entregues = 0
+      let enviados = 0
+
+      if (campLogs.length > 0) {
+        respondidos = campLogs.filter((l: any) => respSet.has(l.participante_id)).length
+        const lidosBruto = campLogs.filter((l: any) => l.status === 'lido').length
+        lidos = Math.max(lidosBruto, respondidos)
+        const entreguesBruto = campLogs.filter((l: any) => l.status === 'entregue' || l.status === 'lido').length
+        entregues = Math.max(entreguesBruto, lidos)
+        enviados = Math.max(campLogs.filter((l: any) => l.status !== 'erro').length, entregues)
+      } else {
+        respondidos = c.respondidos_count || 0
+        lidos = c.lidos_count || 0
+        entregues = c.entregues_count || 0
+        enviados = c.enviados_count || 0
+      }
+
+      let status = c.status
+      if (enviados > 0 && status === 'rascunho') {
+        status = (c.total_destinatarios > 0 && enviados >= c.total_destinatarios) ? 'concluido' : 'pausado'
+      }
+
+      return {
+        ...c,
+        status,
+        enviados_count: enviados,
+        entregues_count: entregues,
+        lidos_count: lidos,
+        respondidos_count: respondidos,
+        objeto_nome: c.objeto?.nome || undefined,
+        pesquisa_titulo: c.pesquisa?.titulo || undefined,
+        pesquisa_token: c.pesquisa?.token || undefined
+      }
+    })
   },
 
   async getCampanhaById(id: string): Promise<CampanhaDisparo | null> {

@@ -260,15 +260,15 @@ export const Campanhas: React.FC = () => {
     if (!campanhaSelecionada) {
       return { total: 0, enviados: 0, entregues: 0, lidos: 0, respondidos: 0, pctEntregues: 0, pctLidos: 0, pctResp: 0 }
     }
-    const total = logsCampanha.length || campanhaSelecionada.total_destinatarios || 0
+    const total = campanhaSelecionada.total_destinatarios || logsCampanha.length || 0
     const respondidos = logsCampanha.filter(l => l.respondeu).length
     const lidos = logsCampanha.filter(l => l.status === 'lido' || l.respondeu).length
     const entregues = logsCampanha.filter(l => l.status === 'entregue' || l.status === 'lido' || l.respondeu).length
     const enviados = logsCampanha.filter(l => l.status !== 'erro').length
 
-    const pctEntregues = total > 0 ? Math.round((entregues / total) * 100) : 0
-    const pctLidos = total > 0 ? Math.round((lidos / total) * 100) : 0
-    const pctResp = total > 0 ? Math.round((respondidos / total) * 100) : 0
+    const pctEntregues = enviados > 0 ? Math.round((entregues / enviados) * 100) : 0
+    const pctLidos = entregues > 0 ? Math.round((lidos / entregues) * 100) : 0
+    const pctResp = lidos > 0 ? Math.round((respondidos / lidos) * 100) : 0
 
     return { total, enviados, entregues, lidos, respondidos, pctEntregues, pctLidos, pctResp }
   }, [campanhaSelecionada, logsCampanha])
@@ -533,9 +533,21 @@ export const Campanhas: React.FC = () => {
     pausadoRef.current = false
     setStatusResfriamento({ emPausa: false, segundosRestantes: 0 })
 
+    // Atualiza dados finais e estatísticas reais no banco
+    const logsFinais = await dbService.getLogsCampanha(camp.id).catch(() => [])
+    const respondidosFinal = logsFinais.filter(l => l.respondeu).length
+    const lidosFinal = Math.max(logsFinais.filter(l => l.status === 'lido').length, respondidosFinal)
+    const entreguesFinal = Math.max(logsFinais.filter(l => l.status === 'entregue' || l.status === 'lido').length, lidosFinal)
+    const enviadosFinal = Math.max(logsFinais.filter(l => l.status !== 'erro').length, entreguesFinal)
+    const foiConcluido = !cancelarLoteRef.current && (camp.total_destinatarios > 0 ? enviadosFinal >= camp.total_destinatarios : true)
+
     await dbService.saveCampanha({
       id: camp.id,
-      status: 'concluido',
+      status: foiConcluido ? 'concluido' : 'pausado',
+      enviados_count: enviadosFinal,
+      entregues_count: entreguesFinal,
+      lidos_count: lidosFinal,
+      respondidos_count: respondidosFinal,
       disparado_em: new Date().toISOString()
     })
     await carregarListaCampanhas(filtroPesquisa, filtroObjeto)
@@ -707,12 +719,21 @@ export const Campanhas: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {campanhasFiltradas.map(camp => {
               const selecionada = campanhaSelecionada?.id === camp.id
-              const pctEntr = camp.total_destinatarios && camp.total_destinatarios > 0
-                ? Math.round(((camp.entregues_count || 0) / camp.total_destinatarios) * 100)
-                : 0
-              const pctLido = camp.total_destinatarios && camp.total_destinatarios > 0
-                ? Math.round(((camp.lidos_count || 0) / camp.total_destinatarios) * 100)
-                : 0
+              const totalDest = (selecionada && metricasCampanha.total > 0)
+                ? metricasCampanha.total
+                : (camp.total_destinatarios || 0)
+              const envCount = selecionada ? metricasCampanha.enviados : (camp.enviados_count || 0)
+              const entrCount = selecionada ? metricasCampanha.entregues : (camp.entregues_count || 0)
+              const lidosCount = selecionada ? metricasCampanha.lidos : (camp.lidos_count || 0)
+              const respCount = selecionada ? metricasCampanha.respondidos : (camp.respondidos_count || 0)
+
+              // Taxas percentuais com base nos envios e entregas reais
+              const pctEntr = envCount > 0 ? Math.round((entrCount / envCount) * 100) : 0
+              const pctLido = entrCount > 0 ? Math.round((lidosCount / entrCount) * 100) : 0
+
+              const estaEnviando = (emLoteProcessando && selecionada) || camp.status === 'enviando'
+              const estaConcluida = camp.status === 'concluido' || (totalDest > 0 && envCount >= totalDest)
+              const estaPausada = !estaConcluida && !estaEnviando && envCount > 0
 
               return (
                 <div
@@ -727,16 +748,19 @@ export const Campanhas: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider ${
-                        camp.status === 'concluido'
+                        estaConcluida
                           ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                          : camp.status === 'enviando'
+                          : estaEnviando
                           ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20 animate-pulse'
+                          : estaPausada
+                          ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
                           : 'bg-muted text-muted-foreground border border-border'
                       }`}>
-                        {camp.status === 'concluido' && <CheckCheck className="h-3 w-3 text-emerald-500" />}
-                        {camp.status === 'enviando' && <Clock className="h-3 w-3 animate-spin text-blue-500" />}
-                        {camp.status === 'rascunho' && <Clock className="h-3 w-3 text-muted-foreground" />}
-                        {camp.status === 'concluido' ? 'Concluída' : camp.status === 'enviando' ? 'Enviando...' : 'Rascunho'}
+                        {estaConcluida && <CheckCheck className="h-3 w-3 text-emerald-500" />}
+                        {estaEnviando && <Clock className="h-3 w-3 animate-spin text-blue-500" />}
+                        {estaPausada && <Pause className="h-3 w-3 text-amber-500" />}
+                        {!estaConcluida && !estaEnviando && !estaPausada && <Clock className="h-3 w-3 text-muted-foreground" />}
+                        {estaConcluida ? 'Concluída' : estaEnviando ? 'Enviando...' : estaPausada ? 'Pausada' : 'Rascunho'}
                       </span>
 
                       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -764,19 +788,19 @@ export const Campanhas: React.FC = () => {
                     <div className="grid grid-cols-4 gap-2 pt-2 border-t border-border/60 text-center">
                       <div className="p-2 rounded-xl bg-muted/40">
                         <span className="text-[9px] font-bold text-muted-foreground block uppercase">Env.</span>
-                        <span className="text-xs font-black text-foreground">{camp.enviados_count || 0}</span>
+                        <span className="text-xs font-black text-foreground">{envCount}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-muted/40">
                         <span className="text-[9px] font-bold text-muted-foreground block uppercase">Entr.</span>
-                        <span className="text-xs font-black text-foreground">{camp.entregues_count || 0}</span>
+                        <span className="text-xs font-black text-foreground">{entrCount}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
                         <span className="text-[9px] font-bold text-blue-600 block uppercase">Lidos</span>
-                        <span className="text-xs font-black text-blue-600">{camp.lidos_count || 0}</span>
+                        <span className="text-xs font-black text-blue-600">{lidosCount}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                         <span className="text-[9px] font-bold text-emerald-600 block uppercase">Resp.</span>
-                        <span className="text-xs font-black text-emerald-600">{camp.respondidos_count || 0}</span>
+                        <span className="text-xs font-black text-emerald-600">{respCount}</span>
                       </div>
                     </div>
 
@@ -803,9 +827,15 @@ export const Campanhas: React.FC = () => {
                         e.stopPropagation()
                         handleIniciarDisparo(camp)
                       }}
-                      className="px-3 py-1 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-bold cursor-pointer"
+                      className={`px-3.5 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                        estaPausada
+                          ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs'
+                          : estaConcluida
+                          ? 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                          : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs'
+                      }`}
                     >
-                      Disparar
+                      {estaConcluida ? 'Reenviar' : estaPausada ? 'Retomar Envio' : 'Disparar'}
                     </button>
                   </div>
                 </div>
