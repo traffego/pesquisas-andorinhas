@@ -11,5 +11,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    target: ['es2020', 'chrome80', 'safari13.1', 'edge80'],
+    cssTarget: ['chrome80', 'safari13.1', 'edge80'],
+  },
 })
 

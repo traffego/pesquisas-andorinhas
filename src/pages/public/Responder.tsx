@@ -81,18 +81,43 @@ export const Responder: React.FC = () => {
 
   const [subflowStack, setSubflowStack] = useState<SubflowState[]>([])
 
-  // Gera ou lê fingerprint do localStorage
-  const getDeviceFingerprint = () => {
-    let fp = localStorage.getItem('andorinha_device_fp')
-    if (!fp) {
-      const userAgent = navigator.userAgent
-      const screenWidth = window.screen.width
-      const screenHeight = window.screen.height
-      const random = Math.random().toString(36).substring(2, 15)
-      fp = btoa(`${userAgent}-${screenWidth}x${screenHeight}-${random}`).substring(0, 32)
-      localStorage.setItem('andorinha_device_fp', fp)
+  // Gera ou lê fingerprint de forma segura e tolerante a WebViews (WhatsApp), navegação anônima e Unicode
+  const getDeviceFingerprint = (): string => {
+    try {
+      const salvo = typeof window !== 'undefined' && window.localStorage 
+        ? window.localStorage.getItem('andorinha_device_fp') 
+        : null
+      if (salvo) return salvo
+    } catch {
+      // localStorage bloqueado ou inacessível em modo anônimo/webview
     }
-    return fp
+
+    try {
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : ''
+      const sw = typeof window !== 'undefined' && window.screen ? window.screen.width : 0
+      const sh = typeof window !== 'undefined' && window.screen ? window.screen.height : 0
+      const rnd = Math.random().toString(36).substring(2, 10)
+      const ts = Date.now().toString(36)
+      // Hash determinístico sem btoa (evita InvalidCharacterError com caracteres acentuados ou Unicode do aparelho)
+      const baseStr = `${ua}-${sw}x${sh}-${rnd}-${ts}`
+      let hash = 0
+      for (let i = 0; i < baseStr.length; i++) {
+        hash = (hash << 5) - hash + baseStr.charCodeAt(i)
+        hash |= 0
+      }
+      const fp = `and_${Math.abs(hash).toString(36)}_${rnd}`
+
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('andorinha_device_fp', fp)
+        }
+      } catch {
+        // Ignora caso gravação seja impedida
+      }
+      return fp
+    } catch {
+      return `and_fb_${Math.random().toString(36).substring(2, 12)}`
+    }
   }
 
   useEffect(() => {
